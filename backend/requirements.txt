@@ -1,0 +1,7 @@
+fastapi==0.115.6
+uvicorn[standard]==0.34.0
+pydantic==2.13.4
+pysnmp==7.1.16
+pysmi==1.5.11
+openai-agents==0.8.4
+eval_type_backport==0.4.0

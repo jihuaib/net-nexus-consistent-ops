@@ -1,0 +1,196 @@
+:root {
+  --nx-bg: #f6f7f9;
+  --nx-surface: #ffffff;
+  --nx-surface-2: #f1f3f6;
+  --nx-border: #d8dee7;
+  --nx-text: #252a32;
+  --nx-text-dim: #697281;
+  --nx-accent: #c75a00;
+  --nx-icon: #c75a00;
+  --nx-accent-text: #ffffff;
+  --nx-danger: #d92d20;
+  --nx-success: #16825b;
+  --nx-warning: #b7791f;
+  --nx-titlebar-bg: #fbfcfd;
+  --nx-rail-bg: #eef1f5;
+  --nx-surface-raised: #ffffff;
+  --nx-control-muted: rgba(37, 42, 50, 0.045);
+  --nx-bg-overlay: rgba(255, 255, 255, 0.72);
+  --nx-border-soft: rgba(105, 114, 129, 0.26);
+  --nx-border-muted: rgba(105, 114, 129, 0.18);
+  --nx-accent-soft: rgba(199, 90, 0, 0.13);
+  --nx-accent-softer: rgba(199, 90, 0, 0.07);
+  --nx-accent-hover: rgba(199, 90, 0, 0.1);
+  --nx-accent-border: rgba(199, 90, 0, 0.44);
+  --nx-accent-border-soft: rgba(199, 90, 0, 0.28);
+  --nx-danger-soft: rgba(217, 45, 32, 0.1);
+  --nx-danger-border: rgba(217, 45, 32, 0.42);
+  --nx-warning-soft: rgba(183, 121, 31, 0.14);
+  --nx-success-soft: rgba(22, 130, 91, 0.1);
+  --nx-radius: 6px;
+  --nx-font-ui: -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif;
+  --nx-font-mono: "Consolas", "Menlo", "DejaVu Sans Mono", monospace;
+  color: var(--nx-text);
+  background: var(--nx-bg);
+  font-family: var(--nx-font-ui);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#app {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  color: var(--nx-text);
+  background: var(--nx-bg);
+  font-size: 13px;
+  overflow: hidden;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-height: 32px;
+  border: 1px solid var(--nx-accent);
+  border-radius: 7px;
+  padding: 0 12px;
+  color: var(--nx-accent-text);
+  background: var(--nx-accent);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+button svg {
+  flex-shrink: 0;
+}
+
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.48;
+}
+
+button.secondary,
+button.prompt {
+  color: var(--nx-text);
+  border-color: var(--nx-border);
+  background: var(--nx-surface-2);
+}
+
+button.secondary:hover,
+button.prompt:hover {
+  color: var(--nx-accent);
+  border-color: var(--nx-accent);
+}
+
+button.secondary.danger {
+  color: var(--nx-danger);
+}
+
+button.secondary.danger:hover {
+  border-color: var(--nx-danger);
+  background: var(--nx-danger-soft);
+}
+
+input,
+select,
+textarea {
+  width: 100%;
+  border: 1px solid var(--nx-border);
+  border-radius: 7px;
+  color: var(--nx-text);
+  background: var(--nx-bg);
+  outline: none;
+}
+
+input,
+select {
+  min-height: 32px;
+  padding: 0 10px;
+}
+
+textarea {
+  resize: vertical;
+  padding: 9px 10px;
+  line-height: 1.5;
+}
+
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: none;
+}
+
+input:focus,
+select:focus,
+textarea:focus {
+  border-color: var(--nx-accent-border-soft);
+  background: var(--nx-surface);
+  box-shadow: inset 0 0 0 1px var(--nx-accent-border-soft);
+}
+
+button:focus-visible {
+  outline: 2px solid var(--nx-accent-border);
+  outline-offset: 1px;
+}
+
+h1,
+h2,
+h3,
+p {
+  margin-top: 0;
+}
+
+h1,
+h2,
+h3 {
+  color: var(--nx-text);
+  letter-spacing: 0;
+}
+
+h1 {
+  margin-bottom: 8px;
+  font-size: 22px;
+}
+
+h2 {
+  margin-bottom: 0;
+  font-size: 15px;
+}
+
+h3 {
+  font-size: 13px;
+}
+
+code {
+  font-family: var(--nx-font-mono);
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--nx-border);
+  border-radius: 5px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}

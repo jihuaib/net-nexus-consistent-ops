@@ -1,0 +1,155 @@
+name: netnexus-frr
+
+services:
+  spine-01:
+    image: netnexus-frr-snmp:latest
+    platform: linux/amd64
+    container_name: netnexus-spine-01
+    hostname: spine-01
+    privileged: true
+    sysctls:
+      net.ipv4.ip_forward: "1"
+    environment:
+      NETNEXUS_DEVICE: spine-01
+      SNMP_COMMUNITY: public
+      NETNEXUS_EVENT_COLLECTOR_HOST: ${NETNEXUS_EVENT_COLLECTOR_HOST:-host.docker.internal}
+      NETNEXUS_SYSLOG_PORT: ${NETNEXUS_SYSLOG_PORT:-1514}
+      NETNEXUS_TRAP_PORT: ${NETNEXUS_TRAP_PORT:-1162}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    ports:
+      - "127.0.0.1:11611:161/udp"
+    volumes:
+      - ./spine-01/daemons:/etc/frr/daemons:ro
+      - ./spine-01/frr.conf:/etc/frr/frr.conf:ro
+      - ./spine-01/vtysh.conf:/etc/frr/vtysh.conf:ro
+    networks:
+      mgmt:
+        interface_name: mgmt0
+        ipv4_address: 172.30.0.11
+      spine_leaf_1:
+        interface_name: eth1
+        ipv4_address: 10.0.11.2
+      spine_leaf_2:
+        interface_name: eth2
+        ipv4_address: 10.0.12.2
+    labels:
+      netnexus.lab: frr-spine-leaf
+      netnexus.device: spine-01
+      netnexus.role: spine
+
+  leaf-01:
+    image: netnexus-frr-snmp:latest
+    platform: linux/amd64
+    container_name: netnexus-leaf-01
+    hostname: leaf-01
+    privileged: true
+    sysctls:
+      net.ipv4.ip_forward: "1"
+    environment:
+      NETNEXUS_DEVICE: leaf-01
+      SNMP_COMMUNITY: public
+      NETNEXUS_EVENT_COLLECTOR_HOST: ${NETNEXUS_EVENT_COLLECTOR_HOST:-host.docker.internal}
+      NETNEXUS_SYSLOG_PORT: ${NETNEXUS_SYSLOG_PORT:-1514}
+      NETNEXUS_TRAP_PORT: ${NETNEXUS_TRAP_PORT:-1162}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    ports:
+      - "127.0.0.1:11612:161/udp"
+    volumes:
+      - ./leaf-01/daemons:/etc/frr/daemons:ro
+      - ./leaf-01/frr.conf:/etc/frr/frr.conf:ro
+      - ./leaf-01/vtysh.conf:/etc/frr/vtysh.conf:ro
+    networks:
+      mgmt:
+        interface_name: mgmt0
+        ipv4_address: 172.30.0.12
+      spine_leaf_1:
+        interface_name: eth1
+        ipv4_address: 10.0.11.3
+    labels:
+      netnexus.lab: frr-spine-leaf
+      netnexus.device: leaf-01
+      netnexus.role: leaf
+
+  leaf-02:
+    image: netnexus-frr-snmp:latest
+    platform: linux/amd64
+    container_name: netnexus-leaf-02
+    hostname: leaf-02
+    privileged: true
+    sysctls:
+      net.ipv4.ip_forward: "1"
+    environment:
+      NETNEXUS_DEVICE: leaf-02
+      SNMP_COMMUNITY: public
+      NETNEXUS_EVENT_COLLECTOR_HOST: ${NETNEXUS_EVENT_COLLECTOR_HOST:-host.docker.internal}
+      NETNEXUS_SYSLOG_PORT: ${NETNEXUS_SYSLOG_PORT:-1514}
+      NETNEXUS_TRAP_PORT: ${NETNEXUS_TRAP_PORT:-1162}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    ports:
+      - "127.0.0.1:11613:161/udp"
+    volumes:
+      - ./leaf-02/daemons:/etc/frr/daemons:ro
+      - ./leaf-02/frr.conf:/etc/frr/frr.conf:ro
+      - ./leaf-02/vtysh.conf:/etc/frr/vtysh.conf:ro
+    networks:
+      mgmt:
+        interface_name: mgmt0
+        ipv4_address: 172.30.0.13
+      spine_leaf_2:
+        interface_name: eth1
+        ipv4_address: 10.0.12.3
+    labels:
+      netnexus.lab: frr-spine-leaf
+      netnexus.device: leaf-02
+      netnexus.role: leaf
+
+  isolated-01:
+    image: netnexus-frr-snmp:latest
+    platform: linux/amd64
+    container_name: netnexus-isolated-01
+    hostname: isolated-01
+    privileged: true
+    sysctls:
+      net.ipv4.ip_forward: "1"
+    environment:
+      NETNEXUS_DEVICE: isolated-01
+      SNMP_COMMUNITY: public
+      NETNEXUS_EVENT_COLLECTOR_HOST: ${NETNEXUS_EVENT_COLLECTOR_HOST:-host.docker.internal}
+      NETNEXUS_SYSLOG_PORT: ${NETNEXUS_SYSLOG_PORT:-1514}
+      NETNEXUS_TRAP_PORT: ${NETNEXUS_TRAP_PORT:-1162}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    ports:
+      - "127.0.0.1:11614:161/udp"
+    volumes:
+      - ./isolated-01/daemons:/etc/frr/daemons:ro
+      - ./isolated-01/frr.conf:/etc/frr/frr.conf:ro
+      - ./isolated-01/vtysh.conf:/etc/frr/vtysh.conf:ro
+    networks:
+      mgmt:
+        interface_name: mgmt0
+        ipv4_address: 172.30.0.14
+    labels:
+      netnexus.lab: frr-spine-leaf
+      netnexus.device: isolated-01
+      netnexus.role: router
+
+networks:
+  mgmt:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.30.0.0/24
+  spine_leaf_1:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 10.0.11.0/29
+  spine_leaf_2:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 10.0.12.0/29

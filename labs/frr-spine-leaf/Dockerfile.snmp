@@ -1,0 +1,11 @@
+FROM frrouting/frr:latest
+
+RUN apk add --no-cache lldpd net-snmp net-snmp-tools iproute2 python3
+
+COPY image/netnexus-start.sh /usr/local/sbin/netnexus-start.sh
+COPY image/netnexus-lldp-mib-agent.py /usr/local/bin/netnexus-lldp-mib-agent.py
+COPY image/netnexus-link-event-agent.py /usr/local/bin/netnexus-link-event-agent.py
+
+RUN chmod +x /usr/local/sbin/netnexus-start.sh /usr/local/bin/netnexus-lldp-mib-agent.py /usr/local/bin/netnexus-link-event-agent.py
+
+ENTRYPOINT ["/sbin/tini", "--", "/usr/local/sbin/netnexus-start.sh"]

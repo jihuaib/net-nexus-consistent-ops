@@ -1,0 +1,31 @@
+{
+  "id": "h3c_snmp_lldp",
+  "provider": "snmp_lldp",
+  "display_name": "H3C SNMP LLDP",
+  "vendor": "h3c",
+  "description": "H3C 设备接入 profile。默认使用标准 SNMP/IF/LLDP OID，可通过页面上传 H3C 私有 MIB 后重新编译。",
+  "protocols": ["SNMPv2c", "SNMPv2-MIB", "IF-MIB", "LLDP-MIB", "H3C private MIB"],
+  "builtin_files": [
+    "builtin/SNMPv2-SMI.txt",
+    "builtin/SNMPv2-TC.txt",
+    "builtin/SNMPv2-CONF.txt",
+    "builtin/SNMPv2-MIB.txt",
+    "builtin/IANAifType-MIB.txt",
+    "builtin/IF-MIB.txt",
+    "builtin/LLDP-MIB.txt"
+  ],
+  "oid_bindings": {
+    "sys_descr": ".1.3.6.1.2.1.1.1.0",
+    "sys_object_id": ".1.3.6.1.2.1.1.2.0",
+    "sys_name": ".1.3.6.1.2.1.1.5.0",
+    "if_name": ".1.3.6.1.2.1.31.1.1.1.1",
+    "if_admin_status": ".1.3.6.1.2.1.2.2.1.7",
+    "if_oper_status": ".1.3.6.1.2.1.2.2.1.8",
+    "lldp_loc_port_id": ".1.0.8802.1.1.2.1.3.7.1.3",
+    "lldp_loc_port_desc": ".1.0.8802.1.1.2.1.3.7.1.4",
+    "lldp_rem_chassis_id": ".1.0.8802.1.1.2.1.4.1.1.5",
+    "lldp_rem_port_id": ".1.0.8802.1.1.2.1.4.1.1.7",
+    "lldp_rem_port_desc": ".1.0.8802.1.1.2.1.4.1.1.8",
+    "lldp_rem_sys_name": ".1.0.8802.1.1.2.1.4.1.1.9"
+  }
+}
