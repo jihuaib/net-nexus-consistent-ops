@@ -1,7 +1,23 @@
-ARG FRR_BASE_IMAGE=frrouting/frr:latest
+ARG FRR_BASE_IMAGE=ubuntu:24.04
 FROM ${FRR_BASE_IMAGE}
 
-RUN apk add --no-cache lldpd net-snmp net-snmp-tools iproute2 python3
+RUN apt-get update && \
+    DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+      bash \
+      ca-certificates \
+      frr \
+      frr-pythontools \
+      iproute2 \
+      iputils-ping \
+      lldpd \
+      net-tools \
+      procps \
+      python3 \
+      snmp \
+      snmpd \
+      tcpdump \
+      tini \
+    && rm -rf /var/lib/apt/lists/*
 
 COPY image/netnexus-start.sh /usr/local/sbin/netnexus-start.sh
 COPY image/netnexus-lldp-mib-agent.py /usr/local/bin/netnexus-lldp-mib-agent.py
@@ -9,4 +25,4 @@ COPY image/netnexus-link-event-agent.py /usr/local/bin/netnexus-link-event-agent
 
 RUN chmod +x /usr/local/sbin/netnexus-start.sh /usr/local/bin/netnexus-lldp-mib-agent.py /usr/local/bin/netnexus-link-event-agent.py
 
-ENTRYPOINT ["/sbin/tini", "--", "/usr/local/sbin/netnexus-start.sh"]
+ENTRYPOINT ["/usr/bin/tini", "--", "/usr/local/sbin/netnexus-start.sh"]

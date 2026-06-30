@@ -701,19 +701,19 @@ exec /bin/sh: exec format error
 ERROR [2/6] RUN apk add --no-cache ...
 ```
 
-原因通常是 Docker 拉到的 FRR 基础镜像和当前宿主机架构不一致。FRR lab 默认不指定 `platform`，Docker 会按当前宿主机架构拉取镜像。
+原因通常是历史缓存里还留着旧的 amd64 FRR 基础镜像。当前 FRR lab 默认用 `ubuntu:24.04` 多架构基础镜像，再用 `apt` 安装 FRR，Docker 会按当前宿主机架构拉取。
 
 处理：
 
 ```bash
-docker image rm frrouting/frr:latest
+docker image rm netnexus-frr-snmp:latest 2>/dev/null || true
 ./scripts/start_frr_lab.sh
 ```
 
-如果 `frrouting/frr:latest` 没有当前架构镜像，换成支持当前架构的 FRR 基础镜像：
+如果需要替换基础镜像，使用 Ubuntu/Debian 系镜像：
 
 ```bash
-FRR_BASE_IMAGE=<your-frr-image> ./scripts/start_frr_lab.sh
+FRR_BASE_IMAGE=<your-ubuntu-or-debian-image> ./scripts/start_frr_lab.sh
 ```
 
 ### 16.6 大模型未配置

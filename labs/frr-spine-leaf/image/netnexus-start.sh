@@ -18,7 +18,7 @@ NETNEXUS_TRAP_PORT="${NETNEXUS_TRAP_PORT:-1162}"
 NETNEXUS_LINK_EVENT_AGENT_ENABLED="${NETNEXUS_LINK_EVENT_AGENT_ENABLED:-1}"
 export NETNEXUS_EVENT_COLLECTOR_HOST NETNEXUS_SYSLOG_PORT NETNEXUS_TRAP_PORT
 
-mkdir -p /var/agentx /run/lldpd /var/run/lldpd /var/lib/net-snmp /var/log/frr
+mkdir -p /var/agentx /run/frr /run/lldpd /var/run/lldpd /var/lib/net-snmp /var/log/frr
 chmod 755 /var/agentx
 
 cat > /etc/syslog.conf <<EOF
@@ -50,4 +50,21 @@ if [ "${NETNEXUS_LINK_EVENT_AGENT_ENABLED}" != "0" ]; then
   /usr/local/bin/netnexus-link-event-agent.py &
 fi
 
-exec /usr/lib/frr/docker-start
+chown -R frr:frr /etc/frr /run/frr /var/log/frr 2>/dev/null || true
+chmod 640 /etc/frr/*.conf /etc/frr/daemons 2>/dev/null || true
+
+if [ -x /usr/lib/frr/docker-start ]; then
+  exec /usr/lib/frr/docker-start
+fi
+
+if [ -x /usr/lib/frr/frrinit.sh ]; then
+  /usr/lib/frr/frrinit.sh start
+  while ! vtysh -c "show version" >/dev/null 2>&1; do
+    sleep 1
+  done
+  touch /var/log/frr/frr.log
+  exec tail -F /var/log/frr/*.log /dev/null
+fi
+
+echo "No supported FRR startup entrypoint found" >&2
+exit 1

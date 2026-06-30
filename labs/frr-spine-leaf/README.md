@@ -42,12 +42,12 @@ cd /Users/jihuaibin/code/NetNexusConsistentOps
 ./scripts/start_frr_lab.sh
 ```
 
-默认 FRR lab 不指定 Docker platform，Docker 会按当前宿主机架构拉取基础镜像。
+默认 FRR lab 使用 `ubuntu:24.04` 作为基础镜像，再通过 `apt` 安装 FRR、lldpd 和 SNMP 工具。`ubuntu:24.04` 是多架构镜像，Docker 会按当前宿主机架构拉取。
 
-如果 `frrouting/frr:latest` 没有当前架构的镜像，换成支持当前架构的 FRR 基础镜像：
+如果你需要替换基础镜像，可以指定其他 Ubuntu/Debian 系镜像：
 
 ```bash
-FRR_BASE_IMAGE=<your-frr-image> ./scripts/start_frr_lab.sh
+FRR_BASE_IMAGE=<your-ubuntu-or-debian-image> ./scripts/start_frr_lab.sh
 ```
 
 查看 BGP：

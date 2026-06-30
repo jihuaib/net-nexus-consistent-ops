@@ -13,7 +13,7 @@ else
   exit 2
 fi
 
-FRR_BASE_IMAGE="${FRR_BASE_IMAGE:-frrouting/frr:latest}"
+FRR_BASE_IMAGE="${FRR_BASE_IMAGE:-ubuntu:24.04}"
 
 docker build \
   --build-arg "FRR_BASE_IMAGE=$FRR_BASE_IMAGE" \
