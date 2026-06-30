@@ -14,8 +14,25 @@ else
 fi
 
 FRR_BASE_IMAGE="${FRR_BASE_IMAGE:-ubuntu:24.04}"
+DOCKER_BUILD_NETWORK="${DOCKER_BUILD_NETWORK:-}"
+
+if [ -z "$DOCKER_BUILD_NETWORK" ] && [ "$(uname -s)" = "Linux" ]; then
+  DOCKER_BUILD_NETWORK="host"
+fi
+
+BUILD_NETWORK_ARGS=()
+if [ -n "$DOCKER_BUILD_NETWORK" ]; then
+  BUILD_NETWORK_ARGS=(--network "$DOCKER_BUILD_NETWORK")
+fi
+
+echo "Building FRR lab image."
+echo "Base image: $FRR_BASE_IMAGE"
+if [ -n "$DOCKER_BUILD_NETWORK" ]; then
+  echo "Docker build network: $DOCKER_BUILD_NETWORK"
+fi
 
 docker build \
+  "${BUILD_NETWORK_ARGS[@]}" \
   --build-arg "FRR_BASE_IMAGE=$FRR_BASE_IMAGE" \
   -t netnexus-frr-snmp:latest \
   -f "$LAB_DIR/Dockerfile.snmp" \
@@ -24,7 +41,6 @@ docker build \
 "${COMPOSE[@]}" -f "$LAB_DIR/docker-compose.yml" up -d
 
 echo "FRR spine-leaf lab started."
-echo "Base image: $FRR_BASE_IMAGE"
 echo "Validate BGP:"
 echo "  docker exec netnexus-spine-01 vtysh -c 'show bgp summary'"
 echo "Discover topology through SNMP/LLDP-MIB:"

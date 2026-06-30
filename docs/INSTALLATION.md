@@ -716,6 +716,20 @@ docker image rm netnexus-frr-snmp:latest 2>/dev/null || true
 FRR_BASE_IMAGE=<your-ubuntu-or-debian-image> ./scripts/start_frr_lab.sh
 ```
 
+如果构建时报 DNS 解析失败：
+
+```text
+Temporary failure resolving 'ports.ubuntu.com'
+```
+
+这是 Docker build 容器内无法解析 Ubuntu 源，不是架构问题。Linux 环境下 `start_frr_lab.sh` 会默认使用宿主网络构建，相当于：
+
+```bash
+DOCKER_BUILD_NETWORK=host ./scripts/start_frr_lab.sh
+```
+
+如果宿主机本身也不能解析，先修宿主机 DNS 或 Docker daemon DNS。
+
 ### 16.6 大模型未配置
 
 现象：
