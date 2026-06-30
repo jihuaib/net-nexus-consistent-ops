@@ -42,7 +42,8 @@
       </label>
 
       <div class="actions-row">
-        <button class="secondary" type="button" :disabled="loading" @click="applyFrrPreset">填入 FRR 实验设备</button>
+        <button class="secondary" type="button" :disabled="loading" @click="applyFrrPortPreset">FRR 端口映射</button>
+        <button class="secondary" type="button" :disabled="loading" @click="applyFrrBridgePreset">FRR 管理 IP</button>
         <button type="submit" :disabled="loading">保存配置</button>
       </div>
     </form>
@@ -111,11 +112,18 @@ function submit() {
   });
 }
 
-function applyFrrPreset() {
+function applyFrrPortPreset() {
   form.profile_id = 'snmp_lldp';
   form.community = 'public';
   form.scan_cidrs = '';
   form.targets = ['127.0.0.1:11611', '127.0.0.1:11612', '127.0.0.1:11613', '127.0.0.1:11614'].join('\n');
+}
+
+function applyFrrBridgePreset() {
+  form.profile_id = 'snmp_lldp';
+  form.community = 'public';
+  form.scan_cidrs = '';
+  form.targets = ['172.30.0.11', '172.30.0.12', '172.30.0.13', '172.30.0.14'].join('\n');
 }
 
 function listFromText(value) {

@@ -81,6 +81,14 @@ curl -X POST http://127.0.0.1:8010/api/topology/discovery-config \
   -d '{"targets":["127.0.0.1:11611","127.0.0.1:11612","127.0.0.1:11613","127.0.0.1:11614"],"scan_cidrs":[],"community":"public"}'
 ```
 
+Linux VM 上如果后端跑在 Docker 宿主机，也可以直接使用 lab 的 Docker 管理网 IP，不走端口映射：
+
+```bash
+curl -X POST http://127.0.0.1:8010/api/topology/discovery-config \
+  -H 'Content-Type: application/json' \
+  -d '{"targets":["172.30.0.11","172.30.0.12","172.30.0.13","172.30.0.14"],"scan_cidrs":[],"community":"public"}'
+```
+
 触发 SNMP/LLDP-MIB 发现：
 
 ```bash
