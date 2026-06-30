@@ -42,6 +42,14 @@ cd /Users/jihuaibin/code/NetNexusConsistentOps
 ./scripts/start_frr_lab.sh
 ```
 
+默认 FRR lab 不指定 Docker platform，Docker 会按当前宿主机架构拉取基础镜像。
+
+如果 `frrouting/frr:latest` 没有当前架构的镜像，换成支持当前架构的 FRR 基础镜像：
+
+```bash
+FRR_BASE_IMAGE=<your-frr-image> ./scripts/start_frr_lab.sh
+```
+
 查看 BGP：
 
 ```bash

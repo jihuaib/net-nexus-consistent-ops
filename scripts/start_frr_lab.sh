@@ -13,8 +13,10 @@ else
   exit 2
 fi
 
+FRR_BASE_IMAGE="${FRR_BASE_IMAGE:-frrouting/frr:latest}"
+
 docker build \
-  --platform linux/amd64 \
+  --build-arg "FRR_BASE_IMAGE=$FRR_BASE_IMAGE" \
   -t netnexus-frr-snmp:latest \
   -f "$LAB_DIR/Dockerfile.snmp" \
   "$LAB_DIR"
@@ -22,6 +24,7 @@ docker build \
 "${COMPOSE[@]}" -f "$LAB_DIR/docker-compose.yml" up -d
 
 echo "FRR spine-leaf lab started."
+echo "Base image: $FRR_BASE_IMAGE"
 echo "Validate BGP:"
 echo "  docker exec netnexus-spine-01 vtysh -c 'show bgp summary'"
 echo "Discover topology through SNMP/LLDP-MIB:"

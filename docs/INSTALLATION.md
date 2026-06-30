@@ -692,7 +692,31 @@ VITE_PROXY_TARGET=http://127.0.0.1:8010 npm run dev
 
 如果显式设置了 `VITE_API_BASE`，浏览器会绕过代理直连该地址，需要确认宿主机能访问这个后端地址和端口。
 
-### 16.5 大模型未配置
+### 16.5 FRR lab 构建出现 exec format error
+
+现象：
+
+```text
+exec /bin/sh: exec format error
+ERROR [2/6] RUN apk add --no-cache ...
+```
+
+原因通常是 Docker 拉到的 FRR 基础镜像和当前宿主机架构不一致。FRR lab 默认不指定 `platform`，Docker 会按当前宿主机架构拉取镜像。
+
+处理：
+
+```bash
+docker image rm frrouting/frr:latest
+./scripts/start_frr_lab.sh
+```
+
+如果 `frrouting/frr:latest` 没有当前架构镜像，换成支持当前架构的 FRR 基础镜像：
+
+```bash
+FRR_BASE_IMAGE=<your-frr-image> ./scripts/start_frr_lab.sh
+```
+
+### 16.6 大模型未配置
 
 现象：
 

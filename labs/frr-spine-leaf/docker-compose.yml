@@ -3,7 +3,6 @@ name: netnexus-frr
 services:
   spine-01:
     image: netnexus-frr-snmp:latest
-    platform: linux/amd64
     container_name: netnexus-spine-01
     hostname: spine-01
     privileged: true
@@ -40,7 +39,6 @@ services:
 
   leaf-01:
     image: netnexus-frr-snmp:latest
-    platform: linux/amd64
     container_name: netnexus-leaf-01
     hostname: leaf-01
     privileged: true
@@ -74,7 +72,6 @@ services:
 
   leaf-02:
     image: netnexus-frr-snmp:latest
-    platform: linux/amd64
     container_name: netnexus-leaf-02
     hostname: leaf-02
     privileged: true
@@ -108,7 +105,6 @@ services:
 
   isolated-01:
     image: netnexus-frr-snmp:latest
-    platform: linux/amd64
     container_name: netnexus-isolated-01
     hostname: isolated-01
     privileged: true

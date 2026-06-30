@@ -1,4 +1,5 @@
-FROM frrouting/frr:latest
+ARG FRR_BASE_IMAGE=frrouting/frr:latest
+FROM ${FRR_BASE_IMAGE}
 
 RUN apk add --no-cache lldpd net-snmp net-snmp-tools iproute2 python3
 
