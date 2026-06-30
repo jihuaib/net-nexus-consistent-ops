@@ -126,7 +126,7 @@ leaf-01 eth1 接口 Down
 
 | fact_type | 说明 |
 |---|---|
-| `INTERFACE_OPER_DOWN` | 接口运行状态 Down |
+| `AI_EXTRACTED_INTERFACE_STATUS` | 接口运行状态 Down |
 
 ## 6.1 拓扑发现实现
 
@@ -223,11 +223,10 @@ fp_d3c161a19522c6af
 
 ```text
 topology_id
-primary_device
-primary_object
-normalized_fault_type
 related_devices
-key_facts
+fact_count
+fact_types
+observed_facts
 ```
 
 设计目的：
@@ -400,7 +399,7 @@ frontend/src/
 第二阶段：
 
 1. 增加单设备多异常样本。
-2. 增加 `BGP_NEIGHBOR_DOWN`、`ROUTE_MISSING`、`FIB_ENTRY_MISSING`。
+2. 增加 `AI_EXTRACTED_CONTROL_PLANE_EVENT`、`AI_EXTRACTED_ROUTING_EVENT`、`AI_EXTRACTED_FORWARDING_EVENT`。
 3. 实现根因和派生异常排序。
 4. 将进程内缓存替换为 Redis。
 5. 增加 RAG 知识库。

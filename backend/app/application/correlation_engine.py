@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from copy import deepcopy
 from typing import Any
 
+from ..domain.event_types import is_recovery_event_type, is_unknown_event_type
 from .event_store import EventStore, parse_time
 
 
@@ -102,25 +102,19 @@ def empty_observations() -> dict[str, list[dict[str, Any]]]:
     }
 
 
-PRIMARY_EVENT_PRIORITY = [
-    "INTERFACE_OPER_DOWN",
-    "BGP_NEIGHBOR_DOWN",
-    "ROUTE_MISSING",
-    "FIB_ENTRY_MISSING",
-    "SERVICE_UNREACHABLE",
-    "TELEMETRY_TRAFFIC_ZERO",
-]
-
-FAULT_EVENT_TYPES = set(PRIMARY_EVENT_PRIORITY)
-RECOVERY_EVENT_TYPES = {
-    "INTERFACE_OPER_UP",
+EVENT_SEVERITY_PRIORITY = {
+    "critical": 0,
+    "major": 1,
+    "warning": 2,
+    "minor": 3,
+    "info": 4,
 }
 
 
 def active_fault_events(events: list[dict[str, Any]]) -> list[dict[str, Any]]:
     latest_recovery_by_key: dict[tuple[str, str], dict[str, Any]] = {}
     for event in events:
-        if event.get("event_type") not in RECOVERY_EVENT_TYPES:
+        if not is_recovery_event(event):
             continue
         key = event_correlation_key(event)
         if not key:
@@ -131,7 +125,7 @@ def active_fault_events(events: list[dict[str, Any]]) -> list[dict[str, Any]]:
 
     active = []
     for event in events:
-        if event.get("event_type") not in FAULT_EVENT_TYPES:
+        if not is_fault_event(event):
             continue
         key = event_correlation_key(event)
         recovery = latest_recovery_by_key.get(key) if key else None
@@ -141,19 +135,28 @@ def active_fault_events(events: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return active
 
 
+def is_recovery_event(event: dict[str, Any]) -> bool:
+    event_type = str(event.get("event_type") or "")
+    attributes = event.get("attributes") or {}
+    return bool(attributes.get("recovery")) or is_recovery_event_type(event_type)
+
+
+def is_fault_event(event: dict[str, Any]) -> bool:
+    if is_recovery_event(event):
+        return False
+    if is_unknown_event_type(str(event.get("event_type") or "")):
+        return False
+    return str(event.get("severity") or "").lower() != "info"
+
+
 def event_correlation_key(event: dict[str, Any]) -> tuple[str, str] | None:
     device_id = str(event.get("device_id") or "")
-    event_type = event.get("event_type")
-    attributes = event.get("attributes") or {}
     if not device_id:
         return None
-    if event_type in {"INTERFACE_OPER_DOWN", "INTERFACE_OPER_UP", "TELEMETRY_TRAFFIC_ZERO"}:
-        interface = str(event.get("object") or "")
-    else:
-        interface = str(attributes.get("depends_on_interface") or "")
-    if not interface or interface in {"unknown-interface", "unknown-object"}:
+    anchor = first_event_anchor(event)
+    if not anchor:
         return None
-    return device_id, interface
+    return device_id, anchor
 
 
 def event_time(event: dict[str, Any]):
@@ -161,24 +164,23 @@ def event_time(event: dict[str, Any]):
 
 
 def select_primary_event(events: list[dict[str, Any]]) -> dict[str, Any] | None:
-    candidates = [event for event in events if event.get("event_type") in PRIMARY_EVENT_PRIORITY]
+    candidates = [event for event in events if is_fault_event(event)]
     if not candidates:
         return None
 
     def priority(event: dict[str, Any]) -> tuple[int, str, str, str]:
-        event_type = event["event_type"]
-        score = PRIMARY_EVENT_PRIORITY.index(event_type) if event_type in PRIMARY_EVENT_PRIORITY else len(PRIMARY_EVENT_PRIORITY)
+        severity = str(event.get("severity") or "").lower()
+        score = EVENT_SEVERITY_PRIORITY.get(severity, len(EVENT_SEVERITY_PRIORITY))
         return score, event["timestamp"], event["device_id"], event["object"]
 
     return sorted(candidates, key=priority)[0]
 
 
 def primary_from_event(event: dict[str, Any]) -> dict[str, Any]:
-    attributes = event.get("attributes") or {}
-    interface = event["object"] if event["event_type"] in {"INTERFACE_OPER_DOWN", "TELEMETRY_TRAFFIC_ZERO"} else attributes.get("depends_on_interface")
+    anchor = first_event_anchor(event) or event["object"]
     return {
         "device_id": event["device_id"],
-        "name": interface or event["object"],
+        "name": anchor,
         "event_type": event["event_type"],
         "source_event_id": event["event_id"],
         "source_channel": event["channel"],
@@ -188,14 +190,11 @@ def primary_from_event(event: dict[str, Any]) -> dict[str, Any]:
 def is_same_fault_window(event: dict[str, Any], primary_event: dict[str, Any]) -> bool:
     if event.get("device_id") != primary_event.get("device_id"):
         return False
-    primary_object = primary_event.get("object")
-    primary_attributes = primary_event.get("attributes") or {}
-    primary_interface = primary_object if primary_event.get("event_type") in {"INTERFACE_OPER_DOWN", "TELEMETRY_TRAFFIC_ZERO"} else primary_attributes.get("depends_on_interface")
-    attributes = event.get("attributes") or {}
-    depends_on = attributes.get("depends_on_interface")
-    if depends_on and primary_interface:
-        return depends_on == primary_interface
-    return True
+    primary_anchors = event_anchor_values(primary_event)
+    anchors = event_anchor_values(event)
+    if not primary_anchors or not anchors:
+        return True
+    return bool(primary_anchors.intersection(anchors))
 
 
 def observations_from_events(
@@ -204,144 +203,53 @@ def observations_from_events(
     primary: dict[str, Any] | None = None,
     topology: dict[str, Any] | None = None,
 ) -> dict[str, list[dict[str, Any]]]:
-    observations = empty_observations()
-    primary_interface = (primary or {}).get("name")
-
-    for event in events:
-        event_type = event["event_type"]
-        device_id = event["device_id"]
-        obj = event["object"]
-        source = event["channel"]
-        attributes = event.get("attributes") or {}
-
-        if event_type == "INTERFACE_OPER_DOWN":
-            if source == "syslog":
-                observations["syslogs"].append(syslog_observation(event))
-            else:
-                observations["interfaces"].append(
-                    {
-                        "device_id": device_id,
-                        "name": obj,
-                        "description": event.get("message") or "",
-                        "admin_status": attributes.get("admin_status", "unknown"),
-                        "oper_status": "down",
-                        "channel": source,
-                        "source": source,
-                    }
-                )
-        elif event_type == "TELEMETRY_TRAFFIC_ZERO":
-            observations["interfaces"].append(
-                {
-                    "device_id": device_id,
-                    "name": obj if obj != "unknown-object" else primary_interface,
-                    "description": event.get("message") or "",
-                    "admin_status": "unknown",
-                    "oper_status": "unknown",
-                    "in_bps": 0,
-                    "out_bps": 0,
-                    "channel": source,
-                    "source": source,
-                }
-            )
-        elif event_type == "BGP_NEIGHBOR_DOWN":
-            observations["bgp_neighbors"].append(
-                {
-                    "device_id": device_id,
-                    "peer": obj,
-                    "remote_device": attributes.get("remote_device", obj),
-                    "remote_interface": attributes.get("remote_interface"),
-                    "state": attributes.get("state", "down"),
-                    "severity": event["severity"],
-                    "source": source,
-                    "depends_on_interface": attributes.get("depends_on_interface") or primary_interface,
-                    "confidence": event["confidence"],
-                }
-            )
-        elif event_type == "ROUTE_MISSING":
-            observations["routes"].append(
-                {
-                    "device_id": device_id,
-                    "prefix": obj,
-                    "next_hop": attributes.get("next_hop", "unknown"),
-                    "status": "missing",
-                    "severity": event["severity"],
-                    "source": source,
-                    "depends_on_interface": attributes.get("depends_on_interface") or primary_interface,
-                    "confidence": event["confidence"],
-                }
-            )
-        elif event_type == "FIB_ENTRY_MISSING":
-            observations["fib_entries"].append(
-                {
-                    "device_id": device_id,
-                    "prefix": obj,
-                    "next_hop": attributes.get("next_hop", "unknown"),
-                    "status": "missing",
-                    "severity": event["severity"],
-                    "source": source,
-                    "depends_on_interface": attributes.get("depends_on_interface") or primary_interface,
-                    "confidence": event["confidence"],
-                }
-            )
-        elif event_type == "SERVICE_UNREACHABLE":
-            observations["service_checks"].append(
-                {
-                    "device_id": device_id,
-                    "service": obj,
-                    "target": attributes.get("target", obj),
-                    "status": "unreachable",
-                    "severity": event["severity"],
-                    "source": source,
-                    "depends_on_interface": attributes.get("depends_on_interface") or primary_interface,
-                }
-            )
-
-    return dedupe_observations(observations)
+    return empty_observations()
 
 
 def is_related_event(event: dict[str, Any], *, device_id: str, interface: str) -> bool:
     if event.get("device_id") != device_id:
         return False
-    event_type = event.get("event_type")
-    obj = event.get("object")
+    anchors = event_anchor_values(event)
+    return not anchors or interface in anchors
+
+
+def first_event_anchor(event: dict[str, Any]) -> str | None:
     attributes = event.get("attributes") or {}
-    if event_type in {"INTERFACE_OPER_DOWN", "TELEMETRY_TRAFFIC_ZERO"}:
-        return obj in {interface, "unknown-interface", "unknown-object"}
-    depends_on = attributes.get("depends_on_interface")
-    return depends_on in {None, "", interface} or event_type in {
-        "BGP_NEIGHBOR_DOWN",
-        "ROUTE_MISSING",
-        "FIB_ENTRY_MISSING",
-        "SERVICE_UNREACHABLE",
-    }
+    for value in [
+        attributes.get("depends_on_interface"),
+        attributes.get("interface"),
+        attributes.get("if_name"),
+        attributes.get("ifName"),
+        attributes.get("normalized_object"),
+        event.get("object"),
+    ]:
+        anchor = clean_anchor(value)
+        if anchor:
+            return anchor
+    return None
 
 
-def syslog_observation(event: dict[str, Any]) -> dict[str, Any]:
-    interface = event.get("object") or "unknown-interface"
-    message = event.get("message") or f"Interface {interface} changed state to DOWN"
-    if "Interface " not in message:
-        message = f"Interface {interface} {message}"
-    return {
-        "device_id": event["device_id"],
-        "message": message,
-        "severity": event["severity"],
-        "source": event["channel"],
-    }
+def event_anchor_values(event: dict[str, Any]) -> set[str]:
+    attributes = event.get("attributes") or {}
+    values = [
+        attributes.get("depends_on_interface"),
+        attributes.get("interface"),
+        attributes.get("if_name"),
+        attributes.get("ifName"),
+        attributes.get("normalized_object"),
+        event.get("object"),
+    ]
+    anchors: set[str] = set()
+    for value in values:
+        anchor = clean_anchor(value)
+        if anchor:
+            anchors.add(anchor)
+    return anchors
 
 
-def dedupe_observations(observations: dict[str, list[dict[str, Any]]]) -> dict[str, list[dict[str, Any]]]:
-    deduped = {}
-    for key, rows in observations.items():
-        seen = set()
-        result = []
-        for row in rows:
-            marker = tuple(sorted((str(item_key), str(item_value)) for item_key, item_value in row.items()))
-            if marker in seen:
-                continue
-            seen.add(marker)
-            result.append(deepcopy(row))
-        deduped[key] = result
-    return deduped
+def clean_anchor(value: Any) -> str | None:
+    anchor = str(value or "").strip()
+    return anchor if anchor and anchor not in {"unknown-interface", "unknown-object"} else None
 
 
 def summarize_correlation(events: list[dict[str, Any]], observations: dict[str, list[dict[str, Any]]]) -> dict[str, Any]:

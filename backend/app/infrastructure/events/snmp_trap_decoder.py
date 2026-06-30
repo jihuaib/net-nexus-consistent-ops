@@ -5,6 +5,7 @@ from typing import Any
 from pyasn1.codec.ber import decoder
 from pysnmp.proto import api
 
+from ...domain.event_types import UNKNOWN_EVENT
 
 SNMP_TRAP_OID = "1.3.6.1.6.3.1.1.4.1.0"
 LINK_DOWN_OID = "1.3.6.1.6.3.1.1.5.3"
@@ -16,9 +17,9 @@ IF_ADMIN_STATUS_PREFIX = "1.3.6.1.2.1.2.2.1.7."
 IF_OPER_STATUS_PREFIX = "1.3.6.1.2.1.2.2.1.8."
 IF_NAME_PREFIX = "1.3.6.1.2.1.31.1.1.1.1."
 
-TRAP_TYPE_BY_OID = {
-    LINK_DOWN_OID: "INTERFACE_OPER_DOWN",
-    LINK_UP_OID: "INTERFACE_OPER_UP",
+TRAP_STATE_BY_OID = {
+    LINK_DOWN_OID: "down",
+    LINK_UP_OID: "up",
 }
 
 TRAP_NAME_BY_OID = {
@@ -100,16 +101,17 @@ def trap_payload_from_varbinds(
     if_oper_status = status_name(first_suffix_value(values, IF_OPER_STATUS_PREFIX))
     if_admin_status = status_name(first_suffix_value(values, IF_ADMIN_STATUS_PREFIX))
     device_id = values.get(SYS_NAME_OID) or source_ip or "unknown-device"
-    event_type = TRAP_TYPE_BY_OID.get(trap_oid, "UNKNOWN_EVENT")
+    trap_state = TRAP_STATE_BY_OID.get(trap_oid)
+    event_type = event_type_from_oper_state(trap_state)
     trap_name = TRAP_NAME_BY_OID.get(trap_oid, trap_oid)
     interface = if_name or (f"ifIndex-{if_index}" if if_index else "unknown-interface")
-    state = if_oper_status or ("down" if event_type == "INTERFACE_OPER_DOWN" else "up" if event_type == "INTERFACE_OPER_UP" else "unknown")
+    state = if_oper_status or trap_state or "unknown"
 
     return {
         "device_id": device_id,
         "event_type": event_type,
         "object": interface,
-        "severity": "critical" if event_type == "INTERFACE_OPER_DOWN" else "info",
+        "severity": "critical" if state == "down" else "info",
         "message": f"{device_id} SNMP Trap {trap_name} interface {interface} oper={state}",
         "raw": payload.hex(),
         "attributes": {
@@ -128,7 +130,7 @@ def trap_payload_from_varbinds(
 def generic_trap_payload(varbinds: list[dict[str, str]], payload: bytes, *, source_ip: str | None) -> dict[str, Any]:
     return {
         "device_id": source_ip or "unknown-device",
-        "event_type": "UNKNOWN_EVENT",
+        "event_type": UNKNOWN_EVENT,
         "object": "snmp-trap",
         "severity": "info",
         "message": "SNMP Trap received",
@@ -151,3 +153,9 @@ def status_name(value: str | None) -> str | None:
     if value is None:
         return None
     return OPER_STATUS_BY_VALUE.get(str(value), str(value))
+
+
+def event_type_from_oper_state(state: str | None) -> str:
+    if state in {"down", "up"}:
+        return f"INTERFACE_OPER_{state.upper()}"
+    return UNKNOWN_EVENT

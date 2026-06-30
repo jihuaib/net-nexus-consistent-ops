@@ -9,7 +9,8 @@ from ..infrastructure.llm.base import LLMClient, LLMResponseError
 from .fact_normalizer import FactNormalizer
 from .diagnosis_schema import LLMDiagnosisResult
 from .llm_prompt import SYSTEM_PROMPT, build_diagnosis_payload
-from .diagnosis_context import ALLOWED_FAULT_TYPES, build_context_constraints
+from .diagnosis_context import build_context_constraints
+from .knowledge_base import KnowledgeBaseService, empty_knowledge_context
 
 
 class DiagnosisService:
@@ -18,10 +19,12 @@ class DiagnosisService:
         collector: ObservationCollector,
         fact_normalizer: FactNormalizer,
         llm_client: LLMClient,
+        knowledge_base: KnowledgeBaseService | None = None,
     ) -> None:
         self._collector = collector
         self._fact_normalizer = fact_normalizer
         self._llm_client = llm_client
+        self._knowledge_base = knowledge_base
         self._cache: dict[str, dict[str, Any]] = {}
 
     def analyze(
@@ -87,6 +90,16 @@ class DiagnosisService:
             }
 
         context_constraints = build_context_constraints(fault_case, facts, question_context)
+        knowledge_context = (
+            self._knowledge_base.retrieve_for_diagnosis(
+                question=question,
+                facts=facts,
+                question_context=question_context,
+                context_constraints=context_constraints,
+            )
+            if self._knowledge_base
+            else empty_knowledge_context()
+        )
         llm_payload = build_diagnosis_payload(
             question=question,
             fault_case=fault_case,
@@ -95,6 +108,7 @@ class DiagnosisService:
             fingerprint_info=fingerprint_info,
             context_constraints=context_constraints,
             question_context=question_context,
+            knowledge_context=knowledge_context,
         )
         return {
             "question": question,
@@ -107,6 +121,7 @@ class DiagnosisService:
             "fingerprint_info": fingerprint_info,
             "fingerprint": fingerprint,
             "context_constraints": context_constraints,
+            "knowledge_context": knowledge_context,
             "llm_payload": llm_payload,
             "cache_hit": False,
         }
@@ -118,6 +133,7 @@ class DiagnosisService:
             facts=prepared["facts"],
             fingerprint_info=prepared["fingerprint_info"],
             context_constraints=prepared["context_constraints"],
+            knowledge_context=prepared.get("knowledge_context") or empty_knowledge_context(),
         )
         result["cache_hit"] = False
         self._cache[prepared["fingerprint"]] = deepcopy(result)
@@ -160,14 +176,12 @@ class DiagnosisService:
         facts: list[dict[str, Any]],
         fingerprint_info: dict[str, Any],
         context_constraints: dict[str, Any],
+        knowledge_context: dict[str, Any],
     ) -> dict[str, Any]:
         try:
             llm_result = LLMDiagnosisResult.model_validate(raw_llm_result)
         except Exception as exc:
             raise LLMResponseError(f"LLM diagnosis JSON failed schema validation: {exc}") from exc
-
-        if llm_result.fault_type not in ALLOWED_FAULT_TYPES:
-            raise LLMResponseError(f"LLM returned unsupported fault_type: {llm_result.fault_type}")
 
         return {
             "fault_fingerprint": fingerprint_info["fingerprint"],
@@ -183,17 +197,11 @@ class DiagnosisService:
             "facts": facts,
             "fingerprint_payload": fingerprint_info["payload"],
             "context_constraints": context_constraints,
+            "knowledge_context": knowledge_context,
             "diagnosis_source": "llm_openai_compatible",
             "llm": self._llm_client.metadata(),
             "data_source": fault_case.get("data_source", "unknown"),
         }
-
-
-def format_fact_evidence(fact: dict[str, Any]) -> str:
-    if fact["fact_type"] == "INTERFACE_OPER_DOWN":
-        status = str(fact.get("value") or "oper=down").replace(",", "、")
-        return f"{fact['device_id']} {fact['object']} {status}"
-    return f"{fact['device_id']} {fact['object']} {fact['fact_type']}={fact['value']}"
 
 
 def build_question_context(

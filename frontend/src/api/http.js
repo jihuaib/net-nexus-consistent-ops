@@ -1,4 +1,11 @@
-export const apiBase = import.meta.env.VITE_API_BASE || 'http://127.0.0.1:8010';
+function defaultApiBase() {
+  if (typeof window === 'undefined' || !window.location?.hostname) {
+    return 'http://127.0.0.1:8010';
+  }
+  return window.location.origin;
+}
+
+export const apiBase = (import.meta.env.VITE_API_BASE || defaultApiBase()).replace(/\/$/, '');
 
 export async function request(path, options = {}) {
   const response = await fetch(`${apiBase}${path}`, {

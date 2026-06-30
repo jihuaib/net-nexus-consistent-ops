@@ -44,7 +44,7 @@
 
 <script setup>
 import { computed } from 'vue';
-import { Bot, Database, RadioReceiver, RadioTower, Satellite } from '@lucide/vue';
+import { Bot, BookOpenText, Database, RadioReceiver, RadioTower, Satellite } from '@lucide/vue';
 
 const props = defineProps({
   activeView: {
@@ -70,6 +70,12 @@ const navItems = [
     label: 'MIB',
     icon: Database,
     description: '编译与 OID Tree',
+  },
+  {
+    id: 'knowledge',
+    label: '知识库',
+    icon: BookOpenText,
+    description: 'RAG 与 SOP',
   },
   {
     id: 'events-syslog',

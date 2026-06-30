@@ -15,6 +15,7 @@ import {
   saveTopologyDiscoveryConfig,
   streamAgentChat,
 } from '../api/consistentOpsApi';
+import { isTopologyStatusEvent } from '../domain/eventTypes';
 import { normalizeErrorAlert, useAlerts } from './useAlerts';
 
 const welcomeMessage =
@@ -348,7 +349,7 @@ export function useAgentWorkspace() {
         return;
       }
       const event = payload.event || {};
-      if (payload.type === 'event' && ['INTERFACE_OPER_DOWN', 'INTERFACE_OPER_UP'].includes(event.event_type)) {
+      if (payload.type === 'event' && isTopologyStatusEvent(event.event_type, event.attributes || {})) {
         scheduleTopologyRefresh();
       }
     });

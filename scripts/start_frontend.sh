@@ -10,4 +10,14 @@ if [ ! -d "node_modules" ]; then
   npm install
 fi
 
-VITE_API_BASE="${VITE_API_BASE:-http://127.0.0.1:8010}" ./node_modules/.bin/vite --host 127.0.0.1 --port "${PORT:-5178}"
+FRONTEND_HOST="${FRONTEND_HOST:-${HOST:-0.0.0.0}}"
+FRONTEND_PORT="${FRONTEND_PORT:-${PORT:-5178}}"
+VITE_PROXY_TARGET="${VITE_PROXY_TARGET:-http://127.0.0.1:${BACKEND_PORT:-8010}}"
+
+echo "Starting development frontend on ${FRONTEND_HOST}:${FRONTEND_PORT}"
+echo "Proxying /api to ${VITE_PROXY_TARGET}"
+if [ -n "${VITE_API_BASE:-}" ]; then
+  VITE_API_BASE="$VITE_API_BASE" VITE_PROXY_TARGET="$VITE_PROXY_TARGET" ./node_modules/.bin/vite --mode development --host "$FRONTEND_HOST" --port "$FRONTEND_PORT"
+else
+  VITE_PROXY_TARGET="$VITE_PROXY_TARGET" ./node_modules/.bin/vite --mode development --host "$FRONTEND_HOST" --port "$FRONTEND_PORT"
+fi

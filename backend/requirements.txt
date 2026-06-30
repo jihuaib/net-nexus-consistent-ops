@@ -5,3 +5,4 @@ pysnmp==7.1.16
 pysmi==1.5.11
 openai-agents==0.8.4
 eval_type_backport==0.4.0
+rank-bm25==0.2.2

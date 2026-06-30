@@ -4,29 +4,23 @@ import hashlib
 import json
 from typing import Any
 
-PRIMARY_PRIORITY = [
-    "INTERFACE_OPER_DOWN",
-    "SYSLOG_LINK_DOWN",
-    "TELEMETRY_TRAFFIC_ZERO",
-    "BGP_NEIGHBOR_DOWN",
-    "ROUTE_MISSING",
-    "FIB_ENTRY_MISSING",
-    "SERVICE_UNREACHABLE",
-]
-
 
 def build_fault_fingerprint(facts: list[dict[str, Any]], topology: dict[str, Any]) -> dict[str, Any]:
-    primary = select_primary_fact(facts)
-    key_facts = sorted({fact["fact_type"] for fact in facts})
+    if not facts:
+        raise ValueError("Cannot build fingerprint without facts")
+
     related_devices = sorted({fact["device_id"] for fact in facts})
+    fact_signatures = sorted(
+        [stable_fact_signature(fact) for fact in facts],
+        key=lambda item: canonical_json(item),
+    )
 
     payload = {
-        "topology_id": topology["id"],
-        "primary_device": primary["device_id"],
-        "primary_object": primary["object"],
-        "normalized_fault_type": normalize_fault_type(primary["fact_type"]),
+        "topology_id": topology.get("id"),
         "related_devices": related_devices,
-        "key_facts": key_facts,
+        "fact_count": len(fact_signatures),
+        "fact_types": sorted({fact["fact_type"] for fact in facts}),
+        "observed_facts": fact_signatures,
     }
 
     digest = hashlib.sha256(canonical_json(payload).encode("utf-8")).hexdigest()[:16]
@@ -59,26 +53,26 @@ def build_context_fingerprint(question_context: dict[str, Any], topology: dict[s
     }
 
 
-def select_primary_fact(facts: list[dict[str, Any]]) -> dict[str, Any]:
-    if not facts:
-        raise ValueError("Cannot build fingerprint without facts")
+def stable_fact_signature(fact: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "device_id": fact.get("device_id"),
+        "scope": fact.get("scope"),
+        "object": fact.get("object"),
+        "fact_type": fact.get("fact_type"),
+        "value": fact.get("value"),
+        "severity": fact.get("severity"),
+        "source": fact.get("source"),
+        "context": stable_context(fact.get("context") or {}),
+    }
 
-    def priority(fact: dict[str, Any]) -> tuple[int, str, str]:
-        fact_type = fact["fact_type"]
-        score = PRIMARY_PRIORITY.index(fact_type) if fact_type in PRIMARY_PRIORITY else len(PRIMARY_PRIORITY)
-        return score, fact["device_id"], fact["object"]
 
-    return sorted(facts, key=priority)[0]
-
-
-def normalize_fault_type(fact_type: str) -> str:
-    if fact_type in {"INTERFACE_OPER_DOWN", "SYSLOG_LINK_DOWN"}:
-        return "INTERFACE_DOWN"
-    if fact_type == "BGP_NEIGHBOR_DOWN":
-        return "BGP_NEIGHBOR_DOWN"
-    if fact_type in {"ROUTE_MISSING", "FIB_ENTRY_MISSING"}:
-        return "ROUTE_FORWARDING_LOSS"
-    return fact_type
+def stable_context(context: dict[str, Any]) -> dict[str, Any]:
+    volatile_keys = {"source_event_id", "event_id", "timestamp", "received_at"}
+    return {
+        str(key): value
+        for key, value in sorted(context.items())
+        if key not in volatile_keys and value not in (None, "")
+    }
 
 
 def canonical_json(payload: dict[str, Any]) -> str:

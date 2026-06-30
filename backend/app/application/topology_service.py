@@ -4,6 +4,7 @@ from copy import deepcopy
 from threading import RLock
 from typing import Any, Protocol
 
+from ..domain.event_types import event_status_from_type
 from ..infrastructure.collectors.base import ObservationCollector
 
 
@@ -70,16 +71,12 @@ class TopologyService:
 
     def apply_event(self, event: dict[str, Any]) -> None:
         event_type = str(event.get("event_type") or "").upper()
-        status_by_type = {
-            "INTERFACE_OPER_DOWN": "down",
-            "INTERFACE_OPER_UP": "up",
-        }
-        status = status_by_type.get(event_type)
+        attributes = event.get("attributes") or {}
+        status = interface_status_from_event(event_type, attributes)
         if not status:
             return
 
         device_id = normalize_key(event.get("device_id"))
-        attributes = event.get("attributes") or {}
         interface = normalize_key(
             event.get("object")
             or attributes.get("if_name")
@@ -376,3 +373,24 @@ def find_interface_override(
 
 def normalize_key(value: Any) -> str:
     return str(value or "").strip().lower()
+
+
+def interface_status_from_event(event_type: str, attributes: dict[str, Any]) -> str | None:
+    explicit_status = str(
+        attributes.get("if_oper_status")
+        or attributes.get("oper_status")
+        or attributes.get("interface_status")
+        or ""
+    ).lower()
+    if explicit_status in {"up", "down"}:
+        return explicit_status
+    if not has_interface_status_hint(event_type, attributes):
+        return None
+    return event_status_from_type(event_type)
+
+
+def has_interface_status_hint(event_type: str, attributes: dict[str, Any]) -> bool:
+    if any(attributes.get(key) for key in ["if_name", "if_index", "interface", "if_oper_status", "oper_status"]):
+        return True
+    normalized = event_type.upper()
+    return normalized.startswith(("INTERFACE_", "IF_"))

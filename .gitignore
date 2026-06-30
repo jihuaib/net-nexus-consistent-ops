@@ -4,5 +4,10 @@ backend/**/__pycache__/
 backend/.pytest_cache/
 frontend/node_modules/
 frontend/dist/
+frontend/.env.local
+frontend/.env.*.local
+frontend/.env.production
+backend/.env
+backend/.env.local
 mibs/workspace/
 .netnexus/

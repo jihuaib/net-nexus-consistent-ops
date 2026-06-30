@@ -66,6 +66,7 @@
           />
 
           <MibView v-else-if="activeView === 'mib'" />
+          <KnowledgeView v-else-if="activeView === 'knowledge'" />
           <SyslogEventsView v-else-if="activeView === 'events-syslog'" />
           <TrapEventsView v-else-if="activeView === 'events-trap'" />
           <TelemetryEventsView v-else-if="activeView === 'events-telemetry'" />
@@ -96,6 +97,7 @@ import AppSidebar from './components/AppSidebar.vue';
 import SettingsDialog from './components/SettingsDialog.vue';
 import { useAgentWorkspace } from './composables/useAgentWorkspace';
 import DiagnosisView from './views/DiagnosisView.vue';
+import KnowledgeView from './views/KnowledgeView.vue';
 import MibView from './views/MibView.vue';
 import SyslogEventsView from './views/events/SyslogEventsView.vue';
 import TelemetryEventsView from './views/events/TelemetryEventsView.vue';

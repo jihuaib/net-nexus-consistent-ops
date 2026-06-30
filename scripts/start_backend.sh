@@ -10,4 +10,8 @@ if [ ! -x ".venv/bin/uvicorn" ]; then
   "$ROOT_DIR/scripts/setup_backend.sh"
 fi
 
-".venv/bin/python" -m uvicorn app.main:app --host 127.0.0.1 --port "${PORT:-8010}"
+BACKEND_HOST="${BACKEND_HOST:-${HOST:-0.0.0.0}}"
+BACKEND_PORT="${BACKEND_PORT:-${PORT:-8010}}"
+
+echo "Starting development backend on ${BACKEND_HOST}:${BACKEND_PORT}"
+APP_ENV="${APP_ENV:-development}" ".venv/bin/python" -m uvicorn app.main:app --host "$BACKEND_HOST" --port "$BACKEND_PORT"

@@ -46,7 +46,6 @@ class SnmpObservationCollector(ObservationCollector):
                 "id": fault_case["id"],
                 "title": fault_case["title"],
                 "description": fault_case["description"],
-                "expected_fault_type": fault_case["expected_fault_type"],
                 "data_source": fault_case["data_source"],
             }
         ]
@@ -66,7 +65,6 @@ class SnmpObservationCollector(ObservationCollector):
             )
 
         event_observations = correlation["observations"]
-        expected_fault_type = expected_fault_type_from_observations(event_observations)
         timestamp = datetime.now(timezone.utc).isoformat()
         return {
             "id": fault_case_id or "live-snmp-current",
@@ -76,7 +74,6 @@ class SnmpObservationCollector(ObservationCollector):
             "data_source": "reported_events",
             "primary_device": primary["device_id"],
             "primary_interface": primary["name"],
-            "expected_fault_type": expected_fault_type,
             "observations": {
                 "timestamp": timestamp,
                 "interfaces": event_observations["interfaces"],
@@ -107,17 +104,7 @@ def empty_topology(discovery_error: str | None = None) -> dict[str, Any]:
         "nodes": [],
         "edges": [],
         "discovery": discovery,
-    }
-
-
-def expected_fault_type_from_observations(observations: dict[str, list[dict[str, Any]]]) -> str:
-    has_link_down = bool(observations.get("interfaces") or observations.get("syslogs"))
-    has_derived = bool(observations.get("bgp_neighbors") or observations.get("routes") or observations.get("fib_entries") or observations.get("service_checks"))
-    if has_link_down and has_derived:
-        return "INTERFACE_DOWN_CAUSES_BGP_ROUTE_LOSS"
-    if has_link_down:
-        return "INTERFACE_DOWN"
-    return "UNKNOWN_NEED_MORE_DATA"
+        }
 
 
 def no_active_fault_case(
@@ -135,7 +122,6 @@ def no_active_fault_case(
         "state": "no_active_fault",
         "primary_device": None,
         "primary_interface": None,
-        "expected_fault_type": "NO_ACTIVE_FAULT",
         "observations": {
             "timestamp": datetime.now(timezone.utc).isoformat(),
             "interfaces": [],

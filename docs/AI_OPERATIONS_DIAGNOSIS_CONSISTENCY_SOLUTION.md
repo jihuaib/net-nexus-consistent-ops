@@ -48,7 +48,7 @@ Agent 都应该给出稳定、一致、可解释、可复现的诊断结论。
 
 | 题目要求 | 本方案对应实现 |
 |---|---|
-| 设计一套基于 Agent 运行的运维一致性兜底策略 | 设计 Consistency Agent，由故障指纹、规则引擎、拓扑分析、诊断缓存、Schema 校验、一致性评分组成 |
+| 设计一套基于 Agent 运行的运维一致性兜底策略 | 设计 Consistency Agent，由事实标准化、故障指纹、上下文约束、拓扑/依赖分析、RAG 检索、诊断缓存、Schema 校验、一致性评分组成 |
 | 设备侧现有能力能够保持少变动或不变动 | 不在设备侧安装新 Agent，不要求升级设备版本，复用 MIB、NETCONF、gRPC、Telemetry、Syslog、只读 CLI |
 | 具备多台设备互联场景的联动分析能力 | 基于拓扑图和事件图，支持 Spine-Leaf 多设备关联诊断 |
 
@@ -102,9 +102,8 @@ NetNexus ConsistentOps
 | 后端框架 | Python + FastAPI | 提供 API、Agent 编排入口 |
 | Agent 编排 | LangGraph 或自研状态机 | 固定诊断流程，避免自由跳转 |
 | 大模型接入 | DeepSeek、通义千问、智谱、OpenAI API、私有化 Qwen/DeepSeek | 负责诊断解释和自然语言总结 |
-| 规则引擎 | Python 自研规则表 / durable_rules 可选 | 处理确定性故障 |
 | 拓扑分析 | NetworkX | 多设备拓扑关联、影响路径分析 |
-| 向量检索 | FAISS / Chroma | 检索历史案例和运维知识 |
+| RAG 检索 | rank-bm25 当前实现，FAISS / Chroma 可作为后续增强 | 检索历史案例和运维知识，作为模型解释和建议的外部知识 |
 | 关系数据库 | MySQL / PostgreSQL | 存储设备、拓扑、故障、诊断结果 |
 | 缓存 | Redis | 存储诊断缓存、会话状态和故障指纹 |
 | 消息队列 | Redis Stream / Celery | 异步采集、诊断任务、批量测试 |
@@ -167,16 +166,16 @@ NetNexus ConsistentOps
 
 ## 6. 核心设计思想
 
-### 6.1 大模型不直接做最终裁决
+### 6.1 大模型在事实约束下生成诊断
 
-大模型在系统中的角色是“解释器”和“推理助手”，不是唯一裁决者。
+大模型在系统中的角色是根因判断、解释和建议生成者；系统负责把实时事实、依赖关系、知识库上下文和输出结构约束准备好。当前实现不维护 `rule_engine.py`，也不使用后端规则结论覆盖大模型输出。
 
 | 能力 | 是否由大模型负责 | 说明 |
 |---|---|---|
 | 设备数据采集 | 否 | 使用 MIB、NETCONF、gRPC、Telemetry、CLI |
 | 事实标准化 | 否 | 系统解析为结构化 Fact |
 | 故障指纹生成 | 否 | 采用确定性算法 |
-| 确定性故障判断 | 否 | 规则引擎优先判断 |
+| 根因判断 | 是 | 大模型基于实时事实、依赖链和知识库上下文判断 |
 | 拓扑路径分析 | 否 | NetworkX 图算法完成 |
 | 历史案例检索 | 部分 | 向量检索负责召回，模型负责理解 |
 | 根因解释 | 是 | 大模型生成可读解释 |
@@ -193,7 +192,7 @@ NetNexus ConsistentOps
   -> 故障指纹生成
   -> 查询诊断缓存
   -> 命中缓存：直接返回标准诊断
-  -> 未命中缓存：规则诊断 + 拓扑分析 + RAG + LLM
+  -> 未命中缓存：上下文约束 + 依赖/拓扑事实 + RAG + LLM
   -> JSON Schema 校验
   -> 结果归一化
   -> 写入诊断缓存
@@ -212,8 +211,8 @@ NetNexus ConsistentOps
 | 低随机模型参数 | temperature 设置为 0 或接近 0 |
 | Prompt 模板版本化 | 同一版本模板保证一致上下文 |
 | JSON Schema 校验 | 保证输出字段、类型和枚举稳定 |
-| 术语归一化 | 将“邻居断开”“Peer Down”等统一为 BGP_NEIGHBOR_DOWN |
-| 规则引擎优先 | 明确故障不让模型随机判断 |
+| 术语归一化 | 将“邻居断开”“Peer Down”等统一为 AI_EXTRACTED_CONTROL_PLANE_EVENT |
+| 事实与依赖约束优先 | 明确证据链和派生关系，减少模型随机判断 |
 | 一致性评分 | 对单会话、多会话结果进行量化比较 |
 
 ## 7. Agent 架构设计
@@ -335,7 +334,7 @@ END
   "device_id": "leaf-01",
   "scope": "interface",
   "object": "GE1/0/1",
-  "fact_type": "INTERFACE_OPER_DOWN",
+  "fact_type": "AI_EXTRACTED_INTERFACE_STATUS",
   "value": "down",
   "severity": "critical",
   "timestamp": "2026-06-25T10:21:33+08:00",
@@ -348,17 +347,17 @@ END
 
 | fact_type | 含义 |
 |---|---|
-| INTERFACE_OPER_DOWN | 接口运行状态 Down |
+| AI_EXTRACTED_INTERFACE_STATUS | 接口运行状态 Down |
 | INTERFACE_ADMIN_DOWN | 接口管理状态 Down |
-| BGP_NEIGHBOR_DOWN | BGP 邻居 Down |
+| AI_EXTRACTED_CONTROL_PLANE_EVENT | BGP 邻居 Down |
 | OSPF_NEIGHBOR_DOWN | OSPF 邻居 Down |
-| ROUTE_MISSING | 路由缺失 |
-| FIB_ENTRY_MISSING | 转发表缺失 |
-| TELEMETRY_TRAFFIC_ZERO | 接口流量为 0 |
+| AI_EXTRACTED_ROUTING_EVENT | 路由缺失 |
+| AI_EXTRACTED_FORWARDING_EVENT | 转发表缺失 |
+| AI_EXTRACTED_TELEMETRY_EVENT | 接口流量为 0 |
 | PACKET_LOSS_HIGH | 丢包率过高 |
 | CPU_HIGH | CPU 使用率过高 |
 | CONFIG_CHANGED | 设备配置发生变更 |
-| SERVICE_UNREACHABLE | 业务不可达 |
+| AI_EXTRACTED_SERVICE_EVENT | 业务不可达 |
 
 ## 10. 故障指纹设计
 
@@ -384,16 +383,10 @@ END
 ```text
 fault_fingerprint = hash(
   topology_id +
-  device_role +
-  primary_device_id +
-  primary_object_type +
-  primary_object_id +
-  normalized_fault_type +
-  related_peer_device +
-  affected_protocol +
-  affected_prefixes +
-  time_window_bucket +
-  key_fact_set
+  related_devices +
+  fact_count +
+  fact_type_set +
+  observed_fact_set
 )
 ```
 
@@ -482,7 +475,7 @@ BGP 会话中断
 系统统一归一化为：
 
 ```text
-BGP_NEIGHBOR_DOWN
+AI_EXTRACTED_CONTROL_PLANE_EVENT
 ```
 
 常用归一化枚举：
@@ -490,9 +483,9 @@ BGP_NEIGHBOR_DOWN
 | 原始表达 | 归一化结果 |
 |---|---|
 | 接口 down、链路断开、link down | INTERFACE_DOWN |
-| BGP peer down、邻居中断 | BGP_NEIGHBOR_DOWN |
-| 路由消失、前缀缺失 | ROUTE_MISSING |
-| 转发表无条目 | FIB_ENTRY_MISSING |
+| BGP peer down、邻居中断 | AI_EXTRACTED_CONTROL_PLANE_EVENT |
+| 路由消失、前缀缺失 | AI_EXTRACTED_ROUTING_EVENT |
+| 转发表无条目 | AI_EXTRACTED_FORWARDING_EVENT |
 | 流量为 0、无入方向流量 | TRAFFIC_ZERO |
 
 ### 11.3 Schema 校验
@@ -564,11 +557,11 @@ consistency_score =
 }
 ```
 
-## 12. 规则诊断引擎
+## 12. 事实约束与依赖链
 
-### 12.1 规则优先级
+### 12.1 依赖优先级
 
-确定性规则优先于大模型。
+当前实现不维护规则表，也不让后端规则结论覆盖 AI 输出。系统在调用大模型前，将实时事件归一化为 Fact，并把派生异常之间的依赖关系放入 `context`，让模型在事实约束下完成根因判断。
 
 ```text
 物理接口 Down
@@ -587,43 +580,30 @@ consistency_score =
 路由缺失会导致业务不可达。
 ```
 
-### 12.2 规则示例
+### 12.2 事实上下文示例
 
-```yaml
-rule_id: R001
-name: interface_down_causes_bgp_down
-conditions:
-  - fact_type: INTERFACE_OPER_DOWN
-  - fact_type: BGP_NEIGHBOR_DOWN
-  - relation: interface_connects_to_bgp_peer
-result:
-  fault_type: INTERFACE_DOWN_CAUSES_BGP_DOWN
-  root_cause_template: "{device} {interface} 接口 Down 导致与 {peer_device} 的 BGP 邻居中断"
-  confidence: 0.95
-```
-
-```yaml
-rule_id: R002
-name: admin_shutdown
-conditions:
-  - fact_type: INTERFACE_ADMIN_DOWN
-  - fact_type: INTERFACE_OPER_DOWN
-result:
-  fault_type: INTERFACE_ADMIN_SHUTDOWN
-  root_cause_template: "{device} {interface} 被管理 shutdown，导致链路不可用"
-  confidence: 0.98
-```
-
-```yaml
-rule_id: R003
-name: route_missing_causes_service_unreachable
-conditions:
-  - fact_type: ROUTE_MISSING
-  - fact_type: SERVICE_UNREACHABLE
-result:
-  fault_type: ROUTE_MISSING_SERVICE_UNREACHABLE
-  root_cause_template: "{device} 缺失到 {prefix} 的路由，导致业务不可达"
-  confidence: 0.90
+```json
+[
+  {
+    "fact_type": "AI_EXTRACTED_INTERFACE_STATUS",
+    "device_id": "leaf-01",
+    "object": "GE1/0/1",
+    "context": {
+      "remote_device": "spine-01",
+      "source_event_id": "evt-link-down"
+    }
+  },
+  {
+    "fact_type": "AI_EXTRACTED_CONTROL_PLANE_EVENT",
+    "device_id": "leaf-01",
+    "object": "10.0.0.1",
+    "context": {
+      "depends_on_interface": "GE1/0/1",
+      "remote_device": "spine-01",
+      "source_event_id": "evt-bgp-down"
+    }
+  }
+]
 ```
 
 ## 13. 拓扑联动分析
@@ -709,14 +689,14 @@ leaf-01 GE1/0/1 Down
 ### 14.3 Prompt 模板
 
 ```text
-你是一名网络设备运维诊断专家。请根据系统提供的结构化事实、拓扑关系、规则诊断结果和知识库片段进行诊断。
+你是一名网络设备运维诊断专家。请根据系统提供的结构化事实、拓扑关系、上下文约束和知识库片段进行诊断。
 
 必须遵守：
 1. 只能基于输入事实分析，不允许编造不存在的设备、接口、路由或告警。
 2. 输出必须是 JSON，不要输出 Markdown。
 3. fault_type 必须从候选枚举中选择。
 4. evidence 必须引用输入事实。
-5. 如果规则诊断已经给出高置信度结论，不得推翻规则结论，只能补充解释。
+5. context_constraints 和 knowledge_context 是辅助上下文，不是最终结论；必须结合实时 facts 判断。
 6. 如果证据不足，需要将 need_more_data 设置为 true。
 7. 同一 fault_fingerprint 下应保持 root_cause、fault_type、evidence、recommendation 一致。
 ```
@@ -738,22 +718,27 @@ leaf-01 GE1/0/1 Down
     {
       "device_id": "leaf-01",
       "object": "GE1/0/1",
-      "fact_type": "INTERFACE_OPER_DOWN",
+      "fact_type": "AI_EXTRACTED_INTERFACE_STATUS",
       "source": "syslog"
     },
     {
       "device_id": "leaf-01",
       "object": "10.0.0.1",
-      "fact_type": "BGP_NEIGHBOR_DOWN",
+      "fact_type": "AI_EXTRACTED_CONTROL_PLANE_EVENT",
       "source": "netconf"
     }
   ],
-  "rule_result": {
-    "fault_type": "INTERFACE_DOWN_CAUSES_BGP_DOWN",
-    "confidence": 0.95
-  },
-  "knowledge_snippets": [
-    "当接口 Down 与 BGP 邻居 Down 同时发生，并且邻居依赖该接口连接时，接口 Down 通常是根因。"
+  "context_constraints": [
+    "AI_EXTRACTED_CONTROL_PLANE_EVENT depends_on_interface=GE1/0/1",
+    "AI_EXTRACTED_ROUTING_EVENT depends_on_interface=GE1/0/1"
+  ],
+  "knowledge_context": [
+    {
+      "title": "网络故障排障 Runbook",
+      "heading": "接口 Down 引发控制面和转发面异常",
+      "retrieval_backend": "rank_bm25.BM25Okapi",
+      "content": "当接口 Down 与 BGP 邻居 Down 同时发生，并且邻居依赖该接口连接时，接口 Down 通常是根因。"
+    }
   ]
 }
 ```
@@ -768,8 +753,8 @@ leaf-01 GE1/0/1 Down
   "affected_devices": ["leaf-01", "spine-01"],
   "affected_services": ["10.10.10.0/24"],
   "evidence": [
-    "leaf-01 GE1/0/1 存在 INTERFACE_OPER_DOWN 事实",
-    "leaf-01 到 spine-01 的 BGP 邻居存在 BGP_NEIGHBOR_DOWN 事实",
+    "leaf-01 GE1/0/1 存在 AI_EXTRACTED_INTERFACE_STATUS 事实",
+    "leaf-01 到 spine-01 的 BGP 邻居存在 AI_EXTRACTED_CONTROL_PLANE_EVENT 事实",
     "拓扑显示该 BGP 邻居依赖 leaf-01 GE1/0/1 到 spine-01 的链路"
   ],
   "diagnosis_chain": [
@@ -807,8 +792,8 @@ leaf-01 GE1/0/1 Down
 
 ```text
 故障摘要 + 事实类型 + 拓扑角色
-  -> 向量检索相似案例
-  -> 关键词检索精确手册
+  -> BM25 检索相似案例和手册
+  -> 关键词/短语/标签加权
   -> 合并去重
   -> 注入大模型上下文
 ```
@@ -1281,7 +1266,7 @@ NetNexusConsistentOps/
 任务：
 
 1. 增加 BGP 邻居、路由、转发表、业务探测事实类型。
-2. 实现规则引擎。
+2. 完善事实依赖链和 RAG 知识检索。
 3. 构建诊断链。
 4. 接入大模型生成解释。
 5. 实现 JSON Schema 校验。
@@ -1370,7 +1355,7 @@ leaf-02 访问 server-01 失败的原因是什么？
 接口 Down -> BGP Down -> 路由缺失 -> 业务不可达
 ```
 
-5. 展示规则命中和证据链。
+5. 展示知识库召回、事实依赖和证据链。
 
 ### 24.3 演示三：Spine-Leaf 多设备联动
 
@@ -1385,11 +1370,11 @@ leaf-02 访问 server-01 失败的原因是什么？
 
 | 风险 | 影响 | 兜底 |
 |---|---|---|
-| 大模型输出 JSON 不合法 | 无法解析 | JSON Schema 修复重试，失败使用规则结果 |
+| 大模型输出 JSON 不合法 | 无法解析 | JSON Schema 修复重试，失败返回结构化降级诊断并要求补充事实 |
 | 大模型输出结论漂移 | 一致性下降 | 故障指纹缓存优先返回标准诊断 |
 | 设备环境不稳定 | 演示失败 | 使用录制样本和模拟数据回放 |
 | 真实设备接口差异 | 采集失败 | CLI 只读命令和模拟数据双通道 |
-| 知识库召回不准 | 解释质量下降 | 规则引擎和拓扑分析优先 |
+| 知识库召回不准 | 解释质量下降 | 实时事实、依赖链和拓扑分析优先 |
 | 多设备拓扑复杂 | 根因误判 | 限定比赛演示拓扑，逐步扩展 |
 
 ## 26. 与 NetNexus 现有能力结合
@@ -1413,7 +1398,7 @@ leaf-02 访问 server-01 失败的原因是什么？
 1. 一套 AI Agent 诊断一致性系统。
 2. 一套单设备和 Spine-Leaf 多设备故障样本。
 3. 一套故障指纹和诊断缓存机制。
-4. 一套规则诊断引擎。
+4. 一套知识库/RAG 检索服务。
 5. 一套大模型 Prompt 和 JSON Schema。
 6. 一套一致性测试工具。
 7. 一个可视化前端。
@@ -1424,7 +1409,7 @@ leaf-02 访问 server-01 失败的原因是什么？
 
 本方案围绕“AI 大模型在运维场景的诊断一致性”构建了一套完整可落地的实现路径。
 
-系统采用 Python + FastAPI + Vue 3 技术架构，接入已有大模型 API，不从零训练模型。通过事实标准化、故障指纹、规则引擎、拓扑分析、RAG 检索、JSON Schema 校验、诊断缓存和一致性评分，实现单设备和多设备网络故障诊断的一致输出。
+系统采用 Python + FastAPI + Vue 3 技术架构，接入已有大模型 API，不从零训练模型。通过事实标准化、故障指纹、依赖/拓扑分析、RAG 检索、JSON Schema 校验、诊断缓存和一致性评分，实现单设备和多设备网络故障诊断的一致输出。
 
 该方案完整覆盖题目要求：
 

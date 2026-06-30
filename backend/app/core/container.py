@@ -8,7 +8,9 @@ from ..application.correlation_engine import CorrelationEngine
 from ..application.diagnosis_service import DiagnosisService
 from ..application.event_stream import EventStreamHub
 from ..application.event_store import EventStore
+from ..application.event_extractor import EventExtractionService
 from ..application.fact_normalizer import FactNormalizer
+from ..application.knowledge_base import KnowledgeBaseService
 from ..application.topology_service import TopologyService
 from ..infrastructure.collectors import SnmpObservationCollector
 from ..infrastructure.events import SnmpTrapReceiver, SyslogReceiver
@@ -32,6 +34,8 @@ class AppContainer:
     topology_service: TopologyService
     llm_config_store: LLMConfigStore
     llm_client: OpenAICompatibleLLMClient
+    event_extractor: EventExtractionService
+    knowledge_base_service: KnowledgeBaseService
     diagnosis_service: DiagnosisService
     agent_service: AgentService
 
@@ -75,10 +79,13 @@ def build_container() -> AppContainer:
     event_store.add_listener(event_stream_hub.publish_event)
     llm_config_store = LLMConfigStore()
     llm_client = OpenAICompatibleLLMClient.from_env(saved_config=llm_config_store.get_config())
+    event_extractor = EventExtractionService(llm_client)
+    knowledge_base_service = KnowledgeBaseService()
     diagnosis_service = DiagnosisService(
         collector=collector,
         fact_normalizer=fact_normalizer,
         llm_client=llm_client,
+        knowledge_base=knowledge_base_service,
     )
     agent_service = AgentService(diagnosis_service)
     return AppContainer(
@@ -94,6 +101,8 @@ def build_container() -> AppContainer:
         topology_service=topology_service,
         llm_config_store=llm_config_store,
         llm_client=llm_client,
+        event_extractor=event_extractor,
+        knowledge_base_service=knowledge_base_service,
         diagnosis_service=diagnosis_service,
         agent_service=agent_service,
     )

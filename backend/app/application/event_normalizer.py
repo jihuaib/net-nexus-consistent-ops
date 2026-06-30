@@ -7,26 +7,14 @@ from typing import Any
 from uuid import uuid4
 
 from ..domain.events import ReportedEvent
-
-
-EVENT_ALIASES = {
-    "LINK_DOWN": "INTERFACE_OPER_DOWN",
-    "LINK_UP": "INTERFACE_OPER_UP",
-    "IF_DOWN": "INTERFACE_OPER_DOWN",
-    "IF_UP": "INTERFACE_OPER_UP",
-    "IF_OPER_DOWN": "INTERFACE_OPER_DOWN",
-    "IF_OPER_UP": "INTERFACE_OPER_UP",
-    "INTERFACE_DOWN": "INTERFACE_OPER_DOWN",
-    "INTERFACE_UP": "INTERFACE_OPER_UP",
-    "BGP_DOWN": "BGP_NEIGHBOR_DOWN",
-    "BGP_PEER_DOWN": "BGP_NEIGHBOR_DOWN",
-    "ROUTE_WITHDRAWN": "ROUTE_MISSING",
-    "ROUTE_LOST": "ROUTE_MISSING",
-    "FIB_MISS": "FIB_ENTRY_MISSING",
-    "FIB_MISSING": "FIB_ENTRY_MISSING",
-    "SERVICE_DOWN": "SERVICE_UNREACHABLE",
-    "TRAFFIC_DROP": "TELEMETRY_TRAFFIC_ZERO",
-}
+from ..domain.event_types import (
+    RAW_REPORTED_EVENT,
+    UNKNOWN_EVENT,
+    canonical_event_type,
+    event_status_from_type,
+    is_recovery_event_type,
+    is_unknown_event_type,
+)
 
 SYSLOG_PROGRAM_NAMES = {
     "bgpd",
@@ -102,27 +90,10 @@ def normalize_timestamp(value: Any) -> str:
 
 def normalize_event_type(value: Any, message: str, payload: dict[str, Any]) -> str:
     if value:
-        event_type = str(value).strip().upper()
-        return EVENT_ALIASES.get(event_type, event_type)
-
-    text = " ".join([message, json.dumps(payload, ensure_ascii=False)]).lower()
-    if "bgp" in text and "end-of-rib" in text:
-        return "BGP_EOR_RECEIVED"
-    if ("bgp" in text or "peer" in text or "neighbor" in text) and any(token in text for token in ["down", "idle", "connect", "active"]):
-        return "BGP_NEIGHBOR_DOWN"
-    if ("fib" in text or "forward" in text) and any(token in text for token in ["missing", "miss", "lost", "withdraw"]):
-        return "FIB_ENTRY_MISSING"
-    if "route" in text and any(token in text for token in ["missing", "withdraw", "lost", "remove"]):
-        return "ROUTE_MISSING"
-    if ("service" in text or "probe" in text) and any(token in text for token in ["unreachable", "down", "fail", "timeout"]):
-        return "SERVICE_UNREACHABLE"
-    if "traffic" in text and any(token in text for token in ["zero", "drop", "0bps"]):
-        return "TELEMETRY_TRAFFIC_ZERO"
-    if ("interface" in text or "ifoperstatus" in text or "link" in text) and "down" in text:
-        return "INTERFACE_OPER_DOWN"
-    if ("interface" in text or "ifoperstatus" in text or "link" in text) and "up" in text:
-        return "INTERFACE_OPER_UP"
-    return "UNKNOWN_EVENT"
+        return canonical_event_type(value)
+    if message or payload:
+        return RAW_REPORTED_EVENT
+    return UNKNOWN_EVENT
 
 
 def normalize_device_id(payload: dict[str, Any], message: str) -> str:
@@ -143,34 +114,41 @@ def normalize_device_id(payload: dict[str, Any], message: str) -> str:
 
 
 def normalize_object(payload: dict[str, Any], message: str, event_type: str) -> str:
-    if event_type in {"INTERFACE_OPER_DOWN", "INTERFACE_OPER_UP", "TELEMETRY_TRAFFIC_ZERO"}:
-        return first_present(payload, ["object", "interface", "if_name", "ifName", "name"]) or extract_interface(message)
-    if event_type == "BGP_NEIGHBOR_DOWN":
-        return first_present(payload, ["object", "peer", "neighbor", "remote_device", "remote_peer"]) or extract_peer(message)
-    if event_type == "BGP_EOR_RECEIVED":
-        return first_present(payload, ["object", "peer", "neighbor", "remote_peer"]) or extract_peer(message)
-    if event_type in {"ROUTE_MISSING", "FIB_ENTRY_MISSING"}:
-        return first_present(payload, ["object", "prefix", "route", "destination"]) or extract_prefix(message)
-    if event_type == "SERVICE_UNREACHABLE":
-        return first_present(payload, ["object", "service", "probe", "target"]) or "service"
-    return first_present(payload, ["object", "name"]) or "unknown-object"
+    return (
+        first_present(
+            payload,
+            [
+                "object",
+                "normalized_object",
+                "interface",
+                "if_name",
+                "ifName",
+                "name",
+                "peer",
+                "neighbor",
+                "remote_device",
+                "remote_peer",
+                "prefix",
+                "route",
+                "destination",
+                "service",
+                "probe",
+                "target",
+            ],
+        )
+        or "unknown-object"
+    )
 
 
 def normalize_severity(value: str, event_type: str, message: str) -> str:
     normalized = value.strip().lower()
     if normalized in {"critical", "major", "minor", "warning", "info"}:
         return normalized
-    if event_type in {"INTERFACE_OPER_DOWN", "BGP_NEIGHBOR_DOWN"}:
-        return "critical"
-    if event_type == "INTERFACE_OPER_UP":
+    if is_unknown_event_type(event_type) or is_recovery_event_type(event_type):
         return "info"
-    if event_type == "BGP_EOR_RECEIVED":
+    if event_status_from_type(event_type) == "up":
         return "info"
-    if event_type in {"ROUTE_MISSING", "FIB_ENTRY_MISSING", "SERVICE_UNREACHABLE"}:
-        return "major"
-    if "warn" in message.lower():
-        return "warning"
-    return "info"
+    return "major"
 
 
 def normalize_confidence(value: Any, channel: str, event_type: str) -> float:
@@ -179,7 +157,7 @@ def normalize_confidence(value: Any, channel: str, event_type: str) -> float:
         return max(0.0, min(confidence, 1.0))
     except (TypeError, ValueError):
         pass
-    if event_type == "UNKNOWN_EVENT":
+    if event_type in {UNKNOWN_EVENT, RAW_REPORTED_EVENT}:
         return 0.3
     if channel == "snmp_trap":
         return 0.95

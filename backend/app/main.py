@@ -87,6 +87,19 @@ class MibTranslateRequest(BaseModel):
     oid: str = Field()
 
 
+class KnowledgeDocumentRequest(BaseModel):
+    id: Optional[str] = Field(default=None)
+    title: str = Field(min_length=1)
+    content: str = Field(min_length=1)
+    source: Optional[str] = Field(default=None)
+    tags: List[str] = Field(default_factory=list)
+
+
+class KnowledgeSearchRequest(BaseModel):
+    query: str = Field(min_length=1)
+    limit: int = Field(default=5, ge=1, le=20)
+
+
 class ReportedEventRequest(BaseModel):
     device_id: Optional[str] = Field(default=None)
     timestamp: Optional[str] = Field(default=None)
@@ -154,8 +167,10 @@ def health() -> dict:
             "event_store",
             "event_websocket_stream",
             "event_correlation",
+            "ai_event_extraction",
             "single_device_multi_anomaly_chain",
             "context_constraint_extraction",
+            "knowledge_base_rag_retrieval",
             "single_and_multi_session_consistency_test",
         ],
         "event_receivers": {
@@ -214,36 +229,27 @@ async def events_websocket(websocket: WebSocket, channel: Optional[str] = Query(
 
 @app.post("/api/events/syslog")
 def ingest_syslog_event(request: ReportedEventRequest) -> dict:
-    event = normalize_reported_event(
-        channel="syslog",
-        payload=request.model_dump(exclude_none=True),
-        raw=request.raw or request.message,
-        source_ip=request.source_ip,
-    )
-    container.diagnosis_service.clear_cache()
-    return {"event": container.event_store.append(event), "summary": container.event_store.summary()}
+    return ingest_reported_event("syslog", request)
 
 
 @app.post("/api/events/trap")
 def ingest_trap_event(request: ReportedEventRequest) -> dict:
-    event = normalize_reported_event(
-        channel="snmp_trap",
-        payload=request.model_dump(exclude_none=True),
-        raw=request.raw or request.message,
-        source_ip=request.source_ip,
-    )
-    container.diagnosis_service.clear_cache()
-    return {"event": container.event_store.append(event), "summary": container.event_store.summary()}
+    return ingest_reported_event("snmp_trap", request)
 
 
 @app.post("/api/events/telemetry")
 def ingest_telemetry_event(request: ReportedEventRequest) -> dict:
+    return ingest_reported_event("grpc_telemetry", request)
+
+
+def ingest_reported_event(channel: str, request: ReportedEventRequest) -> dict:
     event = normalize_reported_event(
-        channel="grpc_telemetry",
+        channel=channel,
         payload=request.model_dump(exclude_none=True),
         raw=request.raw or request.message,
         source_ip=request.source_ip,
     )
+    event = container.event_extractor.extract(event)
     container.diagnosis_service.clear_cache()
     return {"event": container.event_store.append(event), "summary": container.event_store.summary()}
 
@@ -343,6 +349,36 @@ def translate_mib_oid(request: MibTranslateRequest) -> dict:
         return container.mib_service.translate_oid(profile_id=request.profile_id, oid=request.oid)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.get("/api/knowledge/documents")
+def list_knowledge_documents() -> dict:
+    return container.knowledge_base_service.list_documents()
+
+
+@app.post("/api/knowledge/documents")
+def upsert_knowledge_document(request: KnowledgeDocumentRequest) -> dict:
+    try:
+        result = container.knowledge_base_service.upsert_document(request.model_dump(exclude_none=True))
+        container.diagnosis_service.clear_cache()
+        return result
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.delete("/api/knowledge/documents/{document_id}")
+def delete_knowledge_document(document_id: str) -> dict:
+    try:
+        result = container.knowledge_base_service.delete_document(document_id)
+        container.diagnosis_service.clear_cache()
+        return result
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.post("/api/knowledge/search")
+def search_knowledge(request: KnowledgeSearchRequest) -> dict:
+    return container.knowledge_base_service.search(request.query, limit=request.limit)
 
 
 @app.get("/api/fault-cases")

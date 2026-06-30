@@ -103,8 +103,10 @@ class AgentService:
         yield self._stage_event(
             "context_constraints",
             "success",
-            f"上下文约束候选类型：{', '.join(prepared['context_constraints'].get('candidate_fault_types') or []) or 'unknown'}",
+            f"已构建 {len(prepared['context_constraints'].get('fact_chain') or [])} 条事实链上下文",
         )
+        knowledge_count = len((prepared.get("knowledge_context") or {}).get("items") or [])
+        yield self._stage_event("knowledge_retrieval", "success", f"检索到 {knowledge_count} 条知识库片段")
         yield self._stage_event("openai_agents_sdk", "running", "OpenAI Agents SDK Runner.run_streamed 正在生成结构化诊断")
 
         agent = self._build_openai_agent()
@@ -362,6 +364,11 @@ class AgentService:
         trace.extend(
             [
                 {
+                    "name": "knowledge_retrieval",
+                    "status": "success",
+                    "summary": knowledge_retrieval_summary(diagnosis),
+                },
+                {
                     "name": "context_constraints",
                     "status": "success",
                     "summary": context_constraints_summary(diagnosis),
@@ -369,7 +376,7 @@ class AgentService:
                 {
                     "name": "consistency_guard",
                     "status": "success",
-                    "summary": "输出字段经过固定模板归一化，参与一致性评分",
+                    "summary": "输出字段经过 JSON Schema 校验、故障指纹缓存，并参与一致性评分",
                 },
             ]
         )
@@ -401,8 +408,24 @@ def cache_trace_summary(diagnosis: dict[str, Any]) -> str:
 
 def context_constraints_summary(diagnosis: dict[str, Any]) -> str:
     constraints = diagnosis.get("context_constraints") or {}
-    candidates = constraints.get("candidate_fault_types") or []
-    return f"系统提供环境事实摘要和候选类型：{', '.join(candidates) or 'unknown'}"
+    fact_count = len(constraints.get("fact_chain") or [])
+    evidence_count = len(constraints.get("evidence") or [])
+    return f"系统提供环境事实摘要：{fact_count} 条事实链，{evidence_count} 条证据"
+
+
+def knowledge_retrieval_summary(diagnosis: dict[str, Any]) -> str:
+    knowledge_context = diagnosis.get("knowledge_context") or {}
+    items = knowledge_context.get("items") or []
+    if not knowledge_context.get("enabled"):
+        return "知识库未启用或未配置，未向本次诊断注入外部资料"
+    if not items:
+        return "知识库已检索，但没有匹配本次问题的片段"
+    titles = []
+    for item in items:
+        title = item.get("title")
+        if title and title not in titles:
+            titles.append(title)
+    return f"向诊断上下文注入 {len(items)} 条知识片段：{', '.join(titles[:3])}"
 
 
 def extract_text_delta(event: Any) -> str:

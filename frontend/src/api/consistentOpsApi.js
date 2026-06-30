@@ -117,6 +117,33 @@ export function translateMibOid({ profileId = 'snmp_lldp', oid }) {
   });
 }
 
+export function fetchKnowledgeDocuments() {
+  return request('/api/knowledge/documents');
+}
+
+export function saveKnowledgeDocument(payload) {
+  return request('/api/knowledge/documents', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
+export function deleteKnowledgeDocument(documentId) {
+  return request(`/api/knowledge/documents/${encodeURIComponent(documentId)}`, {
+    method: 'DELETE',
+  });
+}
+
+export function searchKnowledge({ query, limit = 5 }) {
+  return request('/api/knowledge/search', {
+    method: 'POST',
+    body: JSON.stringify({
+      query,
+      limit,
+    }),
+  });
+}
+
 export function saveLlmConfig(config) {
   return request('/api/llm/config', {
     method: 'POST',
