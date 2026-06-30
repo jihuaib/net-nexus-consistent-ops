@@ -15,10 +15,16 @@ fi
 
 FRR_BASE_IMAGE="${FRR_BASE_IMAGE:-ubuntu:24.04}"
 DOCKER_BUILD_NETWORK="${DOCKER_BUILD_NETWORK:-}"
+NETNEXUS_EVENT_COLLECTOR_HOST="${NETNEXUS_EVENT_COLLECTOR_HOST:-}"
 
 if [ -z "$DOCKER_BUILD_NETWORK" ] && [ "$(uname -s)" = "Linux" ]; then
   DOCKER_BUILD_NETWORK="host"
 fi
+
+if [ -z "$NETNEXUS_EVENT_COLLECTOR_HOST" ] && [ "$(uname -s)" = "Linux" ]; then
+  NETNEXUS_EVENT_COLLECTOR_HOST="172.30.0.1"
+fi
+export NETNEXUS_EVENT_COLLECTOR_HOST
 
 BUILD_NETWORK_ARGS=()
 if [ -n "$DOCKER_BUILD_NETWORK" ]; then
@@ -29,6 +35,9 @@ echo "Building FRR lab image."
 echo "Base image: $FRR_BASE_IMAGE"
 if [ -n "$DOCKER_BUILD_NETWORK" ]; then
   echo "Docker build network: $DOCKER_BUILD_NETWORK"
+fi
+if [ -n "$NETNEXUS_EVENT_COLLECTOR_HOST" ]; then
+  echo "Event collector host: $NETNEXUS_EVENT_COLLECTOR_HOST"
 fi
 
 docker build \
@@ -41,6 +50,9 @@ docker build \
 "${COMPOSE[@]}" -f "$LAB_DIR/docker-compose.yml" up -d
 
 echo "FRR spine-leaf lab started."
+if [ -n "$NETNEXUS_EVENT_COLLECTOR_HOST" ]; then
+  echo "Syslog/Trap target: $NETNEXUS_EVENT_COLLECTOR_HOST:1514 / $NETNEXUS_EVENT_COLLECTOR_HOST:1162"
+fi
 echo "Validate BGP:"
 echo "  docker exec netnexus-spine-01 vtysh -c 'show bgp summary'"
 echo "Discover topology through SNMP/LLDP-MIB:"

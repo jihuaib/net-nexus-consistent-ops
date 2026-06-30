@@ -5,9 +5,11 @@
 容器内还运行一个轻量链路事件 agent。它只监听真实 `/sys/class/net/eth*` 状态变化；当你执行 `ip link set eth1 down/up` 时，会向后端发出：
 
 ```text
-UDP Syslog:     host.docker.internal:1514
-SNMPv2 Trap:    host.docker.internal:1162
+UDP Syslog:     NETNEXUS_EVENT_COLLECTOR_HOST:1514
+SNMPv2 Trap:    NETNEXUS_EVENT_COLLECTOR_HOST:1162
 ```
+
+Mac/Docker Desktop 默认使用 `host.docker.internal`。Linux VM 默认使用 lab 管理网宿主机网关 `172.30.0.1`，避免 `host.docker.internal` 在 Linux 环境下不可达。
 
 这不是页面或脚本模拟投递事件，而是 FRR lab 设备侧基于真实接口状态变化发出的上报。
 
@@ -120,6 +122,8 @@ docker exec netnexus-leaf-01 ip link set eth1 down
 ```
 
 后端启动时默认监听 `0.0.0.0:1514/udp` 和 `0.0.0.0:1162/udp`。前端左侧进入 `Syslog` 和 `Trap` 页面，应能看到 `leaf-01 eth1` 的 linkDown 上报。
+
+注意：设置页里的 `Seed IP / 主机名` 和 `管理网段 CIDR` 只控制主动 SNMP 拓扑采集，不控制 Syslog/Trap 回传地址。Syslog/Trap 回传地址由 `NETNEXUS_EVENT_COLLECTOR_HOST` 控制。
 
 恢复：
 

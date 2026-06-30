@@ -21,7 +21,7 @@
         :class="{ active: settingsOpen }"
         type="button"
         title="设置"
-        @click="openSettings()"
+        @click="settingsOpen = true"
       >
         <Settings :size="16" :stroke-width="1.9" />
       </button>
@@ -54,7 +54,6 @@
             :topology="topology"
             :topology-group-id="topologyGroupId"
             :topology-capabilities="topologyCapabilities"
-            :topology-discovery-config="topologyDiscoveryConfig"
             @send="sendMessage"
             @quick="sendQuick"
             @switch-session="switchSession"
@@ -63,9 +62,6 @@
             @test-consistency="runConsistency"
             @discover-topology="discoverTopology"
             @select-topology-group="selectTopologyGroup"
-            @configure-topology="openSettings('topology')"
-            @apply-frr-topology-preset="applyFrrTopologyPreset"
-            @apply-frr-bridge-topology-preset="applyFrrBridgeTopologyPreset"
             @refresh="loadAll"
           />
 
@@ -81,7 +77,6 @@
     <SettingsDialog
       v-if="settingsOpen"
       :loading="loading"
-      :initial-category="settingsCategory"
       :llm-config="llmConfig"
       :topology-discovery-config="topologyDiscoveryConfig"
       @close="settingsOpen = false"
@@ -110,7 +105,6 @@ import TrapEventsView from './views/events/TrapEventsView.vue';
 
 const activeView = ref('diagnosis');
 const settingsOpen = ref(false);
-const settingsCategory = ref('llm');
 
 const {
   loading,
@@ -141,39 +135,6 @@ const {
   saveTopologyConfig,
   resetSession,
 } = useAgentWorkspace();
-
-function openSettings(category = 'llm') {
-  settingsCategory.value = category;
-  settingsOpen.value = true;
-}
-
-async function applyFrrTopologyPreset() {
-  await saveTopologyConfig({
-    profile_id: 'snmp_lldp',
-    community: 'public',
-    scan_enabled: true,
-    scan_cidrs: [],
-    targets: ['127.0.0.1:11611', '127.0.0.1:11612', '127.0.0.1:11613', '127.0.0.1:11614'],
-    timeout_seconds: 3,
-    scan_timeout_seconds: 1.5,
-    scan_concurrency: 12,
-    max_scan_hosts: 256,
-  });
-}
-
-async function applyFrrBridgeTopologyPreset() {
-  await saveTopologyConfig({
-    profile_id: 'snmp_lldp',
-    community: 'public',
-    scan_enabled: true,
-    scan_cidrs: [],
-    targets: ['172.30.0.11', '172.30.0.12', '172.30.0.13', '172.30.0.14'],
-    timeout_seconds: 3,
-    scan_timeout_seconds: 1.5,
-    scan_concurrency: 12,
-    max_scan_hosts: 256,
-  });
-}
 
 </script>
 

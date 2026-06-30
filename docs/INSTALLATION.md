@@ -748,7 +748,47 @@ export LLM_API_KEY=your-api-key
 
 然后重启后端。
 
-### 16.6 一致性评分不是 1.0
+### 16.7 Linux VM 中 FRR 接口 down 后没有 Syslog/Trap
+
+拓扑设置页里的 `Seed IP / 主机名`、`管理网段 CIDR` 只影响后端主动 SNMP 采集拓扑，不影响设备侧事件回传。FRR lab 的接口 down/up 事件由容器内链路 agent 发出：
+
+```text
+UDP Syslog  -> NETNEXUS_EVENT_COLLECTOR_HOST:1514
+SNMP Trap   -> NETNEXUS_EVENT_COLLECTOR_HOST:1162
+```
+
+Linux VM 默认使用 lab 管理网网关 `172.30.0.1` 作为事件接收地址。修改后需要重建容器：
+
+```bash
+docker compose -f labs/frr-spine-leaf/docker-compose.yml down
+./scripts/start_frr_lab.sh
+```
+
+确认后端 UDP receiver 正在监听：
+
+```bash
+curl http://127.0.0.1:8010/api/health | jq '.event_receivers'
+ss -lunp | egrep ':1514|:1162'
+```
+
+正确的故障注入方式是在容器内 down 业务接口，不要 down 管理口：
+
+```bash
+curl -X DELETE http://127.0.0.1:8010/api/events
+docker exec netnexus-leaf-01 ip link set eth1 up
+sleep 2
+docker exec netnexus-leaf-01 ip link set eth1 down
+curl 'http://127.0.0.1:8010/api/events?limit=20&since_seconds=120'
+```
+
+如果仍没有事件，检查容器内回传目标：
+
+```bash
+docker exec netnexus-leaf-01 sh -lc 'getent ahostsv4 "$NETNEXUS_EVENT_COLLECTOR_HOST"; echo "$NETNEXUS_EVENT_COLLECTOR_HOST"'
+docker logs netnexus-leaf-01 --tail 80
+```
+
+### 16.8 一致性评分不是 1.0
 
 同一 SNMP 故障观测下应为 `1.0`。如果不是，优先检查：
 

@@ -13,9 +13,6 @@
             {{ group.label }}
           </option>
         </select>
-        <button class="secondary icon-action" type="button" title="配置采集入口" @click="$emit('configure')">
-          <Settings :size="15" />
-        </button>
         <button class="secondary" @click="$emit('discover', { mode: 'snmp_lldp' })" :disabled="loading">
           <Play :size="15" />
           <span>采集</span>
@@ -24,27 +21,6 @@
     </template>
 
     <div class="topology-panel">
-      <div v-if="!hasDiscoverySource" class="discovery-empty">
-        <div>
-          <strong>未配置 SNMP 采集入口</strong>
-          <p>配置 seed IP 或管理网段后才能读取设备 MIB 并发现 LLDP 拓扑。</p>
-        </div>
-        <div class="discovery-empty__actions">
-          <button class="secondary" type="button" :disabled="loading" @click="$emit('apply-frr-preset')">
-            <Server :size="15" />
-            <span>FRR 端口映射</span>
-          </button>
-          <button class="secondary" type="button" :disabled="loading" @click="$emit('apply-frr-bridge-preset')">
-            <Network :size="15" />
-            <span>FRR 管理 IP</span>
-          </button>
-          <button type="button" @click="$emit('configure')">
-            <Settings :size="15" />
-            <span>配置采集入口</span>
-          </button>
-        </div>
-      </div>
-
       <div class="topology-summary">
         <div>
           <span>设备</span>
@@ -67,7 +43,7 @@
 
 <script setup>
 import { computed } from 'vue';
-import { Network, Play, Server, Settings } from '@lucide/vue';
+import { Play } from '@lucide/vue';
 import TopologyGraph from './TopologyGraph.vue';
 import UiPanel from './ui/UiPanel.vue';
 
@@ -78,17 +54,12 @@ const props = defineProps({
     default: 'all',
   },
   capabilities: Object,
-  discoveryConfig: Object,
   loading: Boolean,
 });
 
-defineEmits(['discover', 'select-group', 'configure', 'apply-frr-preset', 'apply-frr-bridge-preset']);
+defineEmits(['discover', 'select-group']);
 
 const groups = computed(() => props.topology?.groups || []);
-const hasDiscoverySource = computed(() => {
-  const config = props.discoveryConfig || {};
-  return Boolean((config.targets || []).length || (config.scan_cidrs || []).length);
-});
 const groupOptions = computed(() => [
   {
     id: 'all',
@@ -193,46 +164,6 @@ function edgeIdentity(edge) {
   white-space: nowrap;
 }
 
-.discover-actions .icon-action {
-  min-width: 32px;
-  width: 32px;
-  padding: 0;
-}
-
-.discovery-empty {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  border: 1px solid var(--nx-warning-border, var(--nx-border));
-  border-radius: 7px;
-  padding: 10px 12px;
-  background: var(--nx-warning-soft, var(--nx-surface-2));
-}
-
-.discovery-empty strong {
-  display: block;
-  color: var(--nx-text);
-  font-size: 13px;
-}
-
-.discovery-empty p {
-  margin: 4px 0 0;
-  color: var(--nx-text-dim);
-  line-height: 1.45;
-}
-
-.discovery-empty__actions {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex: 0 0 auto;
-}
-
-.discovery-empty__actions button {
-  white-space: nowrap;
-}
-
 .topology-summary {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -273,15 +204,6 @@ function edgeIdentity(edge) {
 
   .discover-actions .group-select {
     width: 100%;
-  }
-
-  .discovery-empty {
-    align-items: stretch;
-    flex-direction: column;
-  }
-
-  .discovery-empty__actions {
-    flex-wrap: wrap;
   }
 }
 </style>

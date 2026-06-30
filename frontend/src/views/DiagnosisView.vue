@@ -40,13 +40,9 @@
           :topology="topology"
           :selected-group-id="topologyGroupId"
           :capabilities="topologyCapabilities"
-          :discovery-config="topologyDiscoveryConfig"
           :loading="loading"
           @discover="$emit('discover-topology', $event)"
           @select-group="$emit('select-topology-group', $event)"
-          @configure="$emit('configure-topology')"
-          @apply-frr-preset="$emit('apply-frr-topology-preset')"
-          @apply-frr-bridge-preset="$emit('apply-frr-bridge-topology-preset')"
         />
 
         <section class="analysis-grid">
@@ -103,7 +99,6 @@ const props = defineProps({
     default: 'all',
   },
   topologyCapabilities: Object,
-  topologyDiscoveryConfig: Object,
 });
 
 const emit = defineEmits([
@@ -117,9 +112,6 @@ const emit = defineEmits([
   'refresh',
   'discover-topology',
   'select-topology-group',
-  'configure-topology',
-  'apply-frr-topology-preset',
-  'apply-frr-bridge-topology-preset',
 ]);
 
 const inputProxy = computed({

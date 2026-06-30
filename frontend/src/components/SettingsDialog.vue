@@ -62,7 +62,7 @@
 </template>
 
 <script setup>
-import { computed, ref, watch } from 'vue';
+import { computed, ref } from 'vue';
 import { BrainCircuit, Network, RefreshCw, X } from '@lucide/vue';
 import { useDraggableSurface } from '../composables/useDraggableSurface';
 import LlmConfigPanel from './LlmConfigPanel.vue';
@@ -70,10 +70,6 @@ import TopologyDiscoveryConfigPanel from './TopologyDiscoveryConfigPanel.vue';
 
 const props = defineProps({
   loading: Boolean,
-  initialCategory: {
-    type: String,
-    default: 'llm',
-  },
   llmConfig: Object,
   topologyDiscoveryConfig: Object,
 });
@@ -95,21 +91,10 @@ const categories = [
   },
 ];
 
-const activeId = ref(normalizeCategoryId(props.initialCategory));
+const activeId = ref('llm');
 const activeCategory = computed(() => categories.find((cat) => cat.id === activeId.value) || categories[0]);
 const panelRef = ref(null);
 const { dragging, surfaceStyle, startDrag } = useDraggableSurface(panelRef);
-
-watch(
-  () => props.initialCategory,
-  (nextCategory) => {
-    activeId.value = normalizeCategoryId(nextCategory);
-  }
-);
-
-function normalizeCategoryId(categoryId) {
-  return categories.some((cat) => cat.id === categoryId) ? categoryId : 'llm';
-}
 </script>
 
 <style scoped>
