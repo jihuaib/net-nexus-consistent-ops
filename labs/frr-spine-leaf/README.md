@@ -52,6 +52,34 @@ cd /Users/jihuaibin/code/NetNexusConsistentOps
 FRR_BASE_IMAGE=<your-ubuntu-or-debian-image> ./scripts/start_frr_lab.sh
 ```
 
+## 生成 x86/amd64 离线镜像包
+
+如果 Linux x86 VM 因网络原因无法在线构建镜像，可以在网络正常的机器上用现有 `Dockerfile.snmp` 生成 amd64 镜像包，然后把压缩包放到 VM 的 `labs/frr-spine-leaf/` 目录下复用现有 `docker-compose.yml` 和设备配置。
+
+在项目根目录执行：
+
+```bash
+docker buildx build \
+  --platform linux/amd64 \
+  --build-arg FRR_BASE_IMAGE=ubuntu:24.04 \
+  -t netnexus-frr-snmp:amd64 \
+  -f labs/frr-spine-leaf/Dockerfile.snmp \
+  labs/frr-spine-leaf \
+  --load
+
+docker image tag netnexus-frr-snmp:amd64 netnexus-frr-snmp:latest
+docker save netnexus-frr-snmp:latest netnexus-frr-snmp:amd64 \
+  | gzip -c > labs/frr-spine-leaf/netnexus-frr-snmp-amd64.tar.gz
+```
+
+在 Linux x86 VM 上加载并启动：
+
+```bash
+cd labs/frr-spine-leaf
+docker load -i netnexus-frr-snmp-amd64.tar.gz
+docker compose up -d
+```
+
 查看 BGP：
 
 ```bash
